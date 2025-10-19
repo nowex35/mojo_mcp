@@ -1,5 +1,5 @@
 from collections import Dict, List
-from .utils import current_time_ms,add_json_key_value
+from .utils import current_time_ms, add_json_key_value, escape_json_string, JSONBuilder, JSONArrayBuilder
 from time import sleep
 from lightbug_http._libc import fork, exit, kill, waitpid, SIGKILL, WNOHANG, c_int, pid_t
 from memory import UnsafePointer
@@ -35,23 +35,22 @@ struct MCPToolParameter(Movable):
 
     fn to_json(self) -> String:
         """Convert parameter to JSON Schema format."""
-        var json = String('{"type":"', escape_json_string(self.type), '","description":"', escape_json_string(self.description), '"')
+        var builder = JSONBuilder()
+        builder.add_string("type", self.type)
+        builder.add_string("description", self.description)
 
         # Add enum values if present
         if len(self.enum_values) > 0:
-            json = json + ',"enum":['
+            var enum_builder = JSONArrayBuilder()
             for i in range(len(self.enum_values)):
-                if i > 0:
-                    json = json + ","
-                json = json + '"' + escape_json_string(self.enum_values[i]) + '"'
-            json = json + "]"
+                enum_builder.add_string(self.enum_values[i])
+            builder.add_raw("enum", enum_builder.build())
 
         # Add default value if present (Note: default_value should already be valid JSON)
         if self.default_value != "":
-            json = json + ',"default":' + self.default_value
+            builder.add_raw("default", self.default_value)
 
-        json = json + "}"
-        return json
+        return builder.build()
 
 @value
 struct MCPTool(Movable):
@@ -96,35 +95,31 @@ struct MCPTool(Movable):
 
     fn to_json(self) raises -> String:
         """Convert tool definition to MCP JSON format."""
-        var json = String('{"name":"', escape_json_string(self.name), '","description":"', escape_json_string(self.description), '"')
-
-        # Add input schema with required parameters inside
-        json = json + ',"inputSchema":{"type":"object","properties":{'
-        var first = True
+        # Build properties object
+        var props_builder = JSONBuilder()
         for param_name in self.input_schema:
-            if not first:
-                json = json + ","
             var param = self.input_schema[param_name]
-            json = json + '"' + escape_json_string(param_name) + '":' + param.to_json()
-            first = False
+            props_builder.add_raw(param_name, param.to_json())
 
-        json = json + "}"
+        # Build inputSchema object
+        var schema_builder = JSONBuilder()
+        schema_builder.add_string("type", "object")
+        schema_builder.add_raw("properties", props_builder.build())
 
-        # Add required parameters inside inputSchema
+        # Add required parameters
         if len(self.required_params) > 0:
-            json = json + ',"required":['
+            var required_builder = JSONArrayBuilder()
             for i in range(len(self.required_params)):
-                if i > 0:
-                    json = json + ","
-                json = json + '"' + escape_json_string(self.required_params[i]) + '"'
-            json = json + "]"
+                required_builder.add_string(self.required_params[i])
+            schema_builder.add_raw("required", required_builder.build())
 
-        json = json + "}"
+        # Build final tool object
+        var builder = JSONBuilder()
+        builder.add_string("name", self.name)
+        builder.add_string("description", self.description)
+        builder.add_raw("inputSchema", schema_builder.build())
 
-        # For maximum compatibility, we'll omit them for now
-
-        json = json + "}"
-        return json
+        return builder.build()
 
     fn validate_arguments(self, arguments_json: String) raises -> ValidationResult:
         """Validate provided arguments against the tool's schema."""
@@ -306,22 +301,21 @@ struct MCPToolContent(Movable):
 
     fn to_json(self) -> String:
         """Convert content to JSON format."""
-        var json = String('{')
-        json = add_json_key_value(json, "type", escape_json_string(self.type))
+        var builder = JSONBuilder()
+        builder.add_string("type", self.type)
 
         if self.type == "text":
-            json = add_json_key_value(json, "text", escape_json_string(self.data))
+            builder.add_string("text", self.data)
         elif self.type == "image":
-            json = add_json_key_value(json, "data", escape_json_string(self.data))
+            builder.add_string("data", self.data)
             if self.mime_type != "":
-                json = add_json_key_value(json, "mimeType", escape_json_string(self.mime_type))
+                builder.add_string("mimeType", self.mime_type)
         elif self.type == "resource":
-            json = add_json_key_value(json, "resource", escape_json_string(self.data))
+            builder.add_string("resource", self.data)
             if self.mime_type != "":
-                json = add_json_key_value(json, "mimeType", escape_json_string(self.mime_type))
+                builder.add_string("mimeType", self.mime_type)
 
-        json = json + "}"
-        return json
+        return builder.build()
 
 @value
 struct MCPToolResult(Movable):
@@ -358,15 +352,27 @@ struct MCPToolResult(Movable):
     fn to_json(self) -> String:
         """Convert result to MCP JSON format."""
         if self.is_error:
-            return String('{"isError":true,"content":[{"type":"text","text":"', escape_json_string(self.error_message), '"}]}')
+            # Build error response
+            var error_content = JSONBuilder()
+            error_content.add_string("type", "text")
+            error_content.add_string("text", self.error_message)
 
-        var json = String('{"content":[')
+            var content_array = JSONArrayBuilder()
+            content_array.add_raw(error_content.build())
+
+            var builder = JSONBuilder()
+            builder.add_bool("isError", True)
+            builder.add_raw("content", content_array.build())
+            return builder.build()
+
+        # Build success response with content array
+        var content_array = JSONArrayBuilder()
         for i in range(len(self.content)):
-            if i > 0:
-                json = json + ","
-            json = json + self.content[i].to_json()
-        json = json + "]}"
-        return json
+            content_array.add_raw(self.content[i].to_json())
+
+        var builder = JSONBuilder()
+        builder.add_raw("content", content_array.build())
+        return builder.build()
 
     @staticmethod
     fn from_json(json_str: String) raises -> MCPToolResult:
@@ -849,38 +855,6 @@ struct MCPToolRegistry(Movable):
 
         # This line should never be reached due to fork logic above, but needed for compiler
         return MCPToolResult(True, "Unreachable code path in fork execution")
-
-# JSON utility functions
-fn escape_json_string(value: String) -> String:
-    """Escape special characters in a string for JSON format."""
-    var escaped = String()
-    for i in range(len(value)):
-        var char = String(value[i])
-        if char == '"':
-            escaped = escaped + '\\"'
-        elif char == '\\':
-            escaped = escaped + '\\\\'
-        elif char == '\n':
-            escaped = escaped + '\\n'
-        elif char == '\r':
-            escaped = escaped + '\\r'
-        elif char == '\t':
-            escaped = escaped + '\\t'
-        elif ord(char) < 32:
-            # Control characters - convert to unicode escape
-            var char_code = ord(char)
-            escaped = escaped + '\\u'
-            var hex_str = String(hex(char_code))
-            # Remove '0x' prefix if present and pad to 4 digits
-            if hex_str.startswith("0x"):
-                hex_str = hex_str[2:]
-            # Zero-pad to 4 digits
-            while len(hex_str) < 4:
-                hex_str = "0" + hex_str
-            escaped = escaped + hex_str
-        else:
-            escaped = escaped + char
-    return escaped
 
 # Utility functions for creating common tool parameter types
 

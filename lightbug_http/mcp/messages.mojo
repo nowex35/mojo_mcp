@@ -1,5 +1,5 @@
 from .jsonrpc import JSONRPCResponse, JSONRPCNotification
-from .utils import current_time_ms
+from .utils import current_time_ms, JSONBuilder
 
 # MCP Protocol Version
 alias MCP_PROTOCOL_VERSION = "2025-06-18"
@@ -15,7 +15,10 @@ struct MCPClientInfo(Movable):
         self.version = version
 
     fn to_json(self) -> String:
-        return String('{"name":"', self.name, '","version":"', self.version, '"}')
+        var builder = JSONBuilder()
+        builder.add_string("name", self.name)
+        builder.add_string("version", self.version)
+        return builder.build()
 
 @value
 struct MCPServerInfo(Movable):
@@ -28,7 +31,10 @@ struct MCPServerInfo(Movable):
         self.version = version
 
     fn to_json(self) -> String:
-        return String('{"name":"', self.name, '","version":"', self.version, '"}')
+        var builder = JSONBuilder()
+        builder.add_string("name", self.name)
+        builder.add_string("version", self.version)
+        return builder.build()
 
 @value
 struct MCPCapabilities(Movable):
@@ -57,47 +63,32 @@ struct MCPCapabilities(Movable):
         self.sampling = sampling
 
     fn to_json(self) -> String:
-        var json = String("{")
-        var first = True
+        var builder = JSONBuilder()
 
         if self.tools:
-            json = json + '"tools":{"listChanged":false}'
-            first = False
+            builder.add_raw("tools", '{"listChanged":false}')
         if self.resources:
-            if not first:
-                json = json + ","
-            json = json + '"resources":{"listChanged":false}'
-            first = False
+            builder.add_raw("resources", '{"listChanged":false}')
         if self.prompts:
-            if not first:
-                json = json + ","
-            json = json + '"prompts":{"listChanged":false}'
-            first = False
+            builder.add_raw("prompts", '{"listChanged":false}')
         if self.logging:
-            if not first:
-                json = json + ","
-            json = json + '"logging":{}'
-            first = False
+            builder.add_raw("logging", '{}')
         if self.roots:
-            if not first:
-                json = json + ","
-            json = json + '"roots":{"listChanged":false}'
-            first = False
+            builder.add_raw("roots", '{"listChanged":false}')
         if self.sampling:
-            if not first:
-                json = json + ","
-            json = json + '"sampling":{}'
+            builder.add_raw("sampling", '{}')
 
-        json = json + "}"
-        return json
+        return builder.build()
 
 # MCP-specific message creation functions
 fn create_initialize_response(id: String, server_info: MCPServerInfo,
                             capabilities: MCPCapabilities) -> JSONRPCResponse:
     """Create an MCP initialize response."""
-    var result = String('{"protocolVersion":"', MCP_PROTOCOL_VERSION,
-                       '","capabilities":', capabilities.to_json(),
-                       ',"serverInfo":', server_info.to_json(), '}')
+    var builder = JSONBuilder()
+    builder.add_string("protocolVersion", MCP_PROTOCOL_VERSION)
+    builder.add_raw("capabilities", capabilities.to_json())
+    builder.add_raw("serverInfo", server_info.to_json())
+    var result = builder.build()
     return JSONRPCResponse.success(id, result)
 
 fn create_initialized_notification() -> JSONRPCNotification:

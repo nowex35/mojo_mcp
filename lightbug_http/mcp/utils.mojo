@@ -1,5 +1,5 @@
 from random import random_si64
-from python import Python
+from python import Python, PythonObject
 from lightbug_http._libc import wait4, WNOHANG
 from lightbug_http._logger import logger
 
@@ -106,3 +106,307 @@ fn add_json_key_value(json: String, key: String, value: String) -> String:
         return String(json, '"', key, '":"', value, '"')
     else:
         return String(json, ',"', key, '":"', value, '"')
+
+
+# ========== JSON Processing Utilities ==========
+
+fn escape_json_string(s: String) -> String:
+    """Escape a string for JSON.
+
+    Args:
+        s: String to escape.
+
+    Returns:
+        Escaped string safe for JSON.
+    """
+    var result = s
+    result = result.replace("\\", "\\\\")
+    result = result.replace('"', '\\"')
+    result = result.replace("\n", "\\n")
+    result = result.replace("\r", "\\r")
+    result = result.replace("\t", "\\t")
+    return result
+
+
+@value
+struct JSONBuilder:
+    """Type-safe JSON object builder.
+
+    Example:
+        var builder = JSONBuilder()
+        builder.add_string("name", "value")
+        builder.add_int("count", 42)
+        builder.add_bool("active", True)
+        var json = builder.build()
+    """
+    var _fields: List[String]
+
+    fn __init__(out self):
+        self._fields = List[String]()
+
+    fn add_string(mut self, key: String, value: String):
+        """Add a string field.
+
+        Args:
+            key: Field name.
+            value: String value.
+        """
+        var escaped = escape_json_string(value)
+        self._fields.append('"' + key + '":"' + escaped + '"')
+
+    fn add_int(mut self, key: String, value: Int):
+        """Add an integer field.
+
+        Args:
+            key: Field name.
+            value: Integer value.
+        """
+        self._fields.append('"' + key + '":' + String(value))
+
+    fn add_bool(mut self, key: String, value: Bool):
+        """Add a boolean field.
+
+        Args:
+            key: Field name.
+            value: Boolean value.
+        """
+        var bool_str = "true" if value else "false"
+        self._fields.append('"' + key + '":' + bool_str)
+
+    fn add_raw(mut self, key: String, json_value: String):
+        """Add a raw JSON value (object, array, etc.).
+
+        Args:
+            key: Field name.
+            json_value: Raw JSON string.
+        """
+        self._fields.append('"' + key + '":' + json_value)
+
+    fn add_optional_string(mut self, key: String, value: String):
+        """Add a string field only if not empty.
+
+        Args:
+            key: Field name.
+            value: String value.
+        """
+        if len(value) > 0:
+            self.add_string(key, value)
+
+    fn add_optional_raw(mut self, key: String, json_value: String):
+        """Add a raw JSON value only if not empty.
+
+        Args:
+            key: Field name.
+            json_value: Raw JSON string.
+        """
+        if len(json_value) > 0:
+            self.add_raw(key, json_value)
+
+    fn build(self) -> String:
+        """Build the final JSON string.
+
+        Returns:
+            JSON object string.
+        """
+        if len(self._fields) == 0:
+            return "{}"
+        return "{" + String(",").join(self._fields) + "}"
+
+
+@value
+struct JSONArrayBuilder:
+    """Type-safe JSON array builder.
+
+    Example:
+        var builder = JSONArrayBuilder()
+        builder.add_string("item1")
+        builder.add_int(42)
+        builder.add_raw('{"nested":"object"}')
+        var json = builder.build()
+    """
+    var _items: List[String]
+
+    fn __init__(out self):
+        self._items = List[String]()
+
+    fn add_string(mut self, value: String):
+        """Add a string item.
+
+        Args:
+            value: String value.
+        """
+        var escaped = escape_json_string(value)
+        self._items.append('"' + escaped + '"')
+
+    fn add_int(mut self, value: Int):
+        """Add an integer item.
+
+        Args:
+            value: Integer value.
+        """
+        self._items.append(String(value))
+
+    fn add_bool(mut self, value: Bool):
+        """Add a boolean item.
+
+        Args:
+            value: Boolean value.
+        """
+        var bool_str = "true" if value else "false"
+        self._items.append(bool_str)
+
+    fn add_raw(mut self, json_value: String):
+        """Add a raw JSON value.
+
+        Args:
+            json_value: Raw JSON string.
+        """
+        self._items.append(json_value)
+
+    fn build(self) -> String:
+        """Build the final JSON array string.
+
+        Returns:
+            JSON array string.
+        """
+        if len(self._items) == 0:
+            return "[]"
+        return "[" + String(",").join(self._items) + "]"
+
+
+@value
+struct JSONParser:
+    """Python-based JSON parser wrapper with type-safe accessors.
+
+    Example:
+        var parser = JSONParser()
+        var data = parser.parse('{"name":"value"}')
+        var name = parser.get_string(data, "name", "default")
+    """
+    var _json_module: PythonObject
+
+    fn __init__(out self) raises:
+        """Initialize the JSON parser."""
+        self._json_module = Python.import_module("json")
+
+    fn parse(self, json_str: String) raises -> PythonObject:
+        """Parse a JSON string.
+
+        Args:
+            json_str: JSON string to parse.
+
+        Returns:
+            Parsed Python object.
+
+        Raises:
+            Error if parsing fails.
+        """
+        return self._json_module.loads(json_str)
+
+    fn get_string(self, obj: PythonObject, key: String, default: String = "") -> String:
+        """Safely get a string value.
+
+        Args:
+            obj: Python object to query.
+            key: Key name.
+            default: Default value if key not found.
+
+        Returns:
+            String value or default.
+        """
+        try:
+            if key in obj:
+                return String(obj[key])
+            return default
+        except:
+            return default
+
+    fn get_int(self, obj: PythonObject, key: String, default: Int = 0) -> Int:
+        """Safely get an integer value.
+
+        Args:
+            obj: Python object to query.
+            key: Key name.
+            default: Default value if key not found.
+
+        Returns:
+            Integer value or default.
+        """
+        try:
+            if key in obj:
+                return Int(obj[key])
+            return default
+        except:
+            return default
+
+    fn get_bool(self, obj: PythonObject, key: String, default: Bool = False) -> Bool:
+        """Safely get a boolean value.
+
+        Args:
+            obj: Python object to query.
+            key: Key name.
+            default: Default value if key not found.
+
+        Returns:
+            Boolean value or default.
+        """
+        try:
+            if key in obj:
+                var value = obj[key]
+                # Python True/False
+                if value is True:
+                    return True
+                elif value is False:
+                    return False
+                # String "true"/"false"
+                var str_val = String(value).lower()
+                return str_val == "true"
+            return default
+        except:
+            return default
+
+    fn has_key(self, obj: PythonObject, key: String) -> Bool:
+        """Check if a key exists.
+
+        Args:
+            obj: Python object to query.
+            key: Key name.
+
+        Returns:
+            True if key exists, False otherwise.
+        """
+        try:
+            return key in obj
+        except:
+            return False
+
+    fn get_object(self, obj: PythonObject, key: String) raises -> PythonObject:
+        """Get a nested object.
+
+        Args:
+            obj: Python object to query.
+            key: Key name.
+
+        Returns:
+            Nested Python object.
+
+        Raises:
+            Error if key not found.
+        """
+        if key not in obj:
+            raise Error("Key not found: " + key)
+        return obj[key]
+
+    fn to_json_string(self, obj: PythonObject) -> String:
+        """Convert a Python object to JSON string.
+
+        Args:
+            obj: Python object to serialize.
+
+        Returns:
+            JSON string representation.
+        """
+        try:
+            return String(self._json_module.dumps(obj))
+        except:
+            return "{}"

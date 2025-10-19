@@ -1,5 +1,6 @@
 from python import Python, PythonObject
 from utils import Variant
+from .utils import JSONBuilder, escape_json_string
 
 alias JSONRPCVersion = "2.0"
 
@@ -35,11 +36,12 @@ struct JSONRPCError(Movable):
 
     fn to_json(self) -> String:
         """Convert error to JSON string."""
-        var json = String('{"code":', String(self.code), ',"message":"', self.message, '"')
+        var builder = JSONBuilder()
+        builder.add_int("code", self.code)
+        builder.add_string("message", self.message)
         if self.data:
-            json = json + ',"data":' + self.data
-        json = json + "}"
-        return json
+            builder.add_raw("data", self.data)
+        return builder.build()
 
 @value
 struct JSONRPCRequest(Movable):
@@ -71,12 +73,13 @@ struct JSONRPCRequest(Movable):
 
     fn to_json(self) -> String:
         """Convert request to JSON string."""
-        var json = String('{"jsonrpc":"', self.jsonrpc, '","id":"', self.id,
-                         '","method":"', self.method, '"')
+        var builder = JSONBuilder()
+        builder.add_string("jsonrpc", self.jsonrpc)
+        builder.add_string("id", self.id)
+        builder.add_string("method", self.method)
         if self.params != "{}":
-            json = json + ',"params":' + self.params
-        json = json + "}"
-        return json
+            builder.add_raw("params", self.params)
+        return builder.build()
 
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC request format."""
@@ -146,15 +149,16 @@ struct JSONRPCResponse(Movable):
 
     fn to_json(self) -> String:
         """Convert response to JSON string."""
-        var json = String('{"jsonrpc":"', self.jsonrpc, '","id":"', self.id, '"')
+        var builder = JSONBuilder()
+        builder.add_string("jsonrpc", self.jsonrpc)
+        builder.add_string("id", self.id)
 
         if self.error:
-            json = json + ',"error":' + self.error
+            builder.add_raw("error", self.error)
         else:
-            json = json + ',"result":' + self.result
+            builder.add_raw("result", self.result)
 
-        json = json + "}"
-        return json
+        return builder.build()
 
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC response format."""
@@ -215,11 +219,12 @@ struct JSONRPCNotification(Movable):
 
     fn to_json(self) -> String:
         """Convert notification to JSON string."""
-        var json = String('{"jsonrpc":"', self.jsonrpc, '","method":"', self.method, '"')
+        var builder = JSONBuilder()
+        builder.add_string("jsonrpc", self.jsonrpc)
+        builder.add_string("method", self.method)
         if self.params != "{}":
-            json = json + ',"params":' + self.params
-        json = json + "}"
-        return json
+            builder.add_raw("params", self.params)
+        return builder.build()
 
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC notification format."""

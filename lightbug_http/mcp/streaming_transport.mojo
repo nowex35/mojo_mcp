@@ -13,6 +13,7 @@ from .jsonrpc import (
 )
 from .server import MCPServer
 from .messages import MCP_PROTOCOL_VERSION, is_compatible_version
+from .utils import JSONBuilder
 
 @value
 struct SSEEvent:
@@ -281,7 +282,10 @@ struct StreamingTransport(StreamableHTTPService):
         exchange.set_status(200)
         exchange.add_header("Content-Type", "application/json")
 
-        var health = bytes('{"status":"healthy","service":"mcp-streaming"}')
+        var health_builder = JSONBuilder()
+        health_builder.add_string("status", "healthy")
+        health_builder.add_string("service", "mcp-streaming")
+        var health = bytes(health_builder.build())
         exchange.add_header("Content-Length", String(len(health)))
         exchange._use_chunked_encoding = False
 
@@ -585,7 +589,9 @@ struct StreamingTransport(StreamableHTTPService):
             exchange.set_status(status)
             self._add_cors_headers(exchange)
             exchange.add_header("Content-Type", "application/json")
-            var error_json = String('{"error":"') + message + String('"}')
+            var builder = JSONBuilder()
+            builder.add_string("error", message)
+            var error_json = builder.build()
             var error_body = bytes(error_json)
             exchange.add_header("Content-Length", String(len(error_body)))
             exchange._use_chunked_encoding = False
@@ -605,7 +611,17 @@ struct StreamingTransport(StreamableHTTPService):
         self._add_cors_headers(exchange)
         exchange.add_header("Content-Type", "application/json")
 
-        var info = bytes('{"service":"mcp-server","protocol":"JSON-RPC 2.0","message":"Use POST method to send MCP JSON-RPC requests","endpoints":{"/":"MCP JSON-RPC endpoint (POST)","/health":"Health check","/sse":"Server-Sent Events (GET)"}}')
+        var endpoints_builder = JSONBuilder()
+        endpoints_builder.add_string("/", "MCP JSON-RPC endpoint (POST)")
+        endpoints_builder.add_string("/health", "Health check")
+        endpoints_builder.add_string("/sse", "Server-Sent Events (GET)")
+
+        var info_builder = JSONBuilder()
+        info_builder.add_string("service", "mcp-server")
+        info_builder.add_string("protocol", "JSON-RPC 2.0")
+        info_builder.add_string("message", "Use POST method to send MCP JSON-RPC requests")
+        info_builder.add_raw("endpoints", endpoints_builder.build())
+        var info = bytes(info_builder.build())
         exchange.add_header("Content-Length", String(len(info)))
         exchange._use_chunked_encoding = False
 

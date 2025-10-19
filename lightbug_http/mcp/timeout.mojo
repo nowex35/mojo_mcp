@@ -1,6 +1,6 @@
 from collections import Dict
 from .jsonrpc import JSONRPCRequest, JSONRPCNotification, JSONRPCError
-from .utils import current_time_ms
+from .utils import current_time_ms, JSONBuilder
 
 # Timeout constants (in milliseconds)
 alias DEFAULT_REQUEST_TIMEOUT: Int = 30000  # 30 seconds
@@ -226,7 +226,10 @@ struct CancellationNotification(Movable):
 
     fn to_json_rpc_notification(self) -> JSONRPCNotification:
         """Convert to a JSON-RPC notification."""
-        var params = String('{"id":"', self.request_id, '","reason":"', self.reason, '"}')
+        var builder = JSONBuilder()
+        builder.add_string("id", self.request_id)
+        builder.add_string("reason", self.reason)
+        var params = builder.build()
         return JSONRPCNotification("notifications/cancelled", params)
 
 @value
@@ -243,7 +246,13 @@ struct ProgressNotification(Movable):
 
     fn to_json_rpc_notification(self) -> JSONRPCNotification:
         """Convert to a JSON-RPC notification."""
-        var params = String('{"progressToken":"', self.progress_token, '","value":{"message":"', self.message, '"}}')
+        var message_builder = JSONBuilder()
+        message_builder.add_string("message", self.message)
+
+        var builder = JSONBuilder()
+        builder.add_string("progressToken", self.progress_token)
+        builder.add_raw("value", message_builder.build())
+        var params = builder.build()
         return JSONRPCNotification("notifications/progress", params)
 
 # Utility functions

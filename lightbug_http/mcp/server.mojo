@@ -3,7 +3,7 @@ from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONR
 from .messages import MCPServerInfo, MCPCapabilities, create_initialize_response, MCP_PROTOCOL_VERSION, is_compatible_version
 from .session import SessionManager
 from .tools import MCPTool, MCPToolRegistry, ToolExecutionFunc
-from .utils import generate_uuid, current_time_ms
+from .utils import generate_uuid, current_time_ms, parse_json_string, parse_json_object_string, parse_json_object
 from .timeout import TimeoutManager, TimeoutConfig, CancellationNotification, create_cancellation_error
 from lightbug_http.streaming.server import StreamingServer
 from .streaming_transport import StreamingTransport
@@ -338,19 +338,28 @@ struct MCPServer(MCPHandler):
 
             var _ = session_id
             if session_id == "":
-                var client_info = String('{"name":"', init_params.client_name, '","version":"', init_params.client_version, '"}')
+                var client_builder = JSONBuilder()
+                client_builder.add_string("name", init_params.client_name)
+                client_builder.add_string("version", init_params.client_version)
+                var client_info = client_builder.build()
                 var _ = self.session_manager.create_session(connection_id, client_info)
             else:
                 try:
                     var session = self.session_manager.get_session(session_id)
                     if session.connection_id != connection_id:
                         self.session_manager.terminate_session_by_connection(session.connection_id)
-                        var client_info = String('{"name":"', init_params.client_name, '","version":"', init_params.client_version, '"}')
+                        var client_builder = JSONBuilder()
+                        client_builder.add_string("name", init_params.client_name)
+                        client_builder.add_string("version", init_params.client_version)
+                        var client_info = client_builder.build()
                         var _ = self.session_manager.create_session(connection_id, client_info)
                     else:
                         self.session_manager.update_session_activity(session_id)
                 except:
-                    var client_info = String('{"name":"', init_params.client_name, '","version":"', init_params.client_version, '"}')
+                    var client_builder = JSONBuilder()
+                    client_builder.add_string("name", init_params.client_name)
+                    client_builder.add_string("version", init_params.client_version)
+                    var client_info = client_builder.build()
                     var _ = self.session_manager.create_session(connection_id, client_info)
 
             var _ = self._negotiate_capabilities(init_params.client_capabilities)
@@ -406,7 +415,9 @@ struct MCPServer(MCPHandler):
 
             tools_array = tools_array + "]"
 
-            var result_json = String('{"tools":' + tools_array + '}')
+            var result_builder = JSONBuilder()
+            result_builder.add_raw("tools", tools_array)
+            var result_json = result_builder.build()
             var response = JSONRPCResponse.success(request.id, result_json)
             return response
         elif request.method == "tools/call":
@@ -439,67 +450,14 @@ struct MCPServer(MCPHandler):
 
     fn _parse_initialize_params(self, params_json: String) raises -> InitializeParams:
         """Parse initialize request parameters."""
-
         var params = InitializeParams()
 
-        var protocol_start = params_json.find("'protocolVersion'")
-        if protocol_start == -1:
-            protocol_start = params_json.find('"protocolVersion"')
+        # Parse protocolVersion
+        params.protocol_version = parse_json_string(params_json, "protocolVersion", MCP_PROTOCOL_VERSION)
 
-        if protocol_start != -1:
-            var protocol_colon = params_json.find(':', protocol_start)
-            if protocol_colon != -1:
-                var protocol_quote_start = params_json.find("'", protocol_colon)
-                var quote_char = String("'")
-                if protocol_quote_start == -1:
-                    protocol_quote_start = params_json.find('"', protocol_colon)
-                    quote_char = String('"')
-
-                if protocol_quote_start != -1:
-                    var protocol_quote_end = params_json.find(quote_char, protocol_quote_start + 1)
-                    if protocol_quote_end != -1:
-                        params.protocol_version = params_json[protocol_quote_start + 1:protocol_quote_end]
-
-        var client_info_start = params_json.find("'clientInfo'")
-        if client_info_start == -1:
-            client_info_start = params_json.find('"clientInfo"')
-
-        if client_info_start != -1:
-            var name_start = params_json.find("'name'", client_info_start)
-            if name_start == -1:
-                name_start = params_json.find('"name"', client_info_start)
-
-            if name_start != -1:
-                var name_colon = params_json.find(':', name_start)
-                if name_colon != -1:
-                    var name_quote_start = params_json.find("'", name_colon)
-                    var name_quote_char = String("'")
-                    if name_quote_start == -1:
-                        name_quote_start = params_json.find('"', name_colon)
-                        name_quote_char = String('"')
-
-                    if name_quote_start != -1:
-                        var name_quote_end = params_json.find(name_quote_char, name_quote_start + 1)
-                        if name_quote_end != -1:
-                            params.client_name = params_json[name_quote_start + 1:name_quote_end]
-
-            var version_start = params_json.find("'version'", client_info_start)
-            if version_start == -1:
-                version_start = params_json.find('"version"', client_info_start)
-
-            if version_start != -1:
-                var version_colon = params_json.find(':', version_start)
-                if version_colon != -1:
-                    var version_quote_start = params_json.find("'", version_colon)
-                    var version_quote_char = String("'")
-                    if version_quote_start == -1:
-                        version_quote_start = params_json.find('"', version_colon)
-                        version_quote_char = String('"')
-
-                    if version_quote_start != -1:
-                        var version_quote_end = params_json.find(version_quote_char, version_quote_start + 1)
-                        if version_quote_end != -1:
-                            params.client_version = params_json[version_quote_start + 1:version_quote_end]
+        # Parse clientInfo.name and clientInfo.version
+        params.client_name = parse_json_object_string(params_json, "clientInfo", "name", "unknown")
+        params.client_version = parse_json_object_string(params_json, "clientInfo", "version", "unknown")
 
         return params
 
@@ -573,53 +531,14 @@ struct MCPServer(MCPHandler):
 
     fn _parse_tool_call_params(self, params_json: String) raises -> ToolCallParams:
         """Parse tool call parameters from JSON."""
-        var name = String("unknown")
+        var name = parse_json_string(params_json, "name", "unknown")
         var arguments = String("{}")
 
-        var name_start = params_json.find("'name'")
-        if name_start == -1:
-            name_start = params_json.find('"name"')
-
-        if name_start != -1:
-            var name_colon = params_json.find(':', name_start)
-            if name_colon != -1:
-                var name_quote_start = params_json.find("'", name_colon)
-                var quote_char = String("'")
-                if name_quote_start == -1:
-                    name_quote_start = params_json.find('"', name_colon)
-                    quote_char = String('"')
-
-                if name_quote_start != -1:
-                    var name_quote_end = params_json.find(quote_char, name_quote_start + 1)
-                    if name_quote_end != -1:
-                        name = params_json[name_quote_start + 1:name_quote_end]
-
-        var args_start = params_json.find("'arguments'")
-        if args_start == -1:
-            args_start = params_json.find('"arguments"')
-
-        if args_start != -1:
-            var args_colon = params_json.find(':', args_start)
-            if args_colon != -1:
-                var args_brace_start = params_json.find('{', args_colon)
-                if args_brace_start != -1:
-                    var brace_count = 1
-                    var pos = args_brace_start + 1
-                    var args_end = -1
-
-                    while pos < len(params_json) and brace_count > 0:
-                        if params_json[pos] == '{':
-                            brace_count += 1
-                        elif params_json[pos] == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                args_end = pos + 1
-                                break
-                        pos += 1
-
-                    if args_end != -1:
-                        arguments = params_json[args_brace_start:args_end]
-                        arguments = arguments.replace("'", '"')
+        try:
+            arguments = parse_json_object(params_json, "arguments")
+        except:
+            # If arguments parsing fails, use default empty object
+            arguments = "{}"
 
         return ToolCallParams(name, arguments)
 
@@ -770,7 +689,9 @@ struct ToolsHandler(RequestHandler):
 
         tools_array = tools_array + "]"
 
-        var result_json = String('{"tools":' + tools_array + '}')
+        var result_builder = JSONBuilder()
+        result_builder.add_raw("tools", tools_array)
+        var result_json = result_builder.build()
         return JSONRPCResponse.success(request.id, result_json)
 
     fn _handle_tools_call(mut self, request: JSONRPCRequest) raises -> JSONRPCResponse:
@@ -789,55 +710,14 @@ struct ToolsHandler(RequestHandler):
 
     fn _parse_tool_call_params(self, params_json: String) raises -> ToolCallParams:
         """Parse tool call parameters from JSON."""
-
-        var name = String("unknown")
+        var name = parse_json_string(params_json, "name", "unknown")
         var arguments = String("{}")
 
-        var name_start = params_json.find("'name'")
-        if name_start == -1:
-            name_start = params_json.find('"name"')
-
-        if name_start != -1:
-            var name_colon = params_json.find(':', name_start)
-            if name_colon != -1:
-                var name_quote_start = params_json.find("'", name_colon)
-                var quote_char = String("'")
-                if name_quote_start == -1:
-                    name_quote_start = params_json.find('"', name_colon)
-                    quote_char = String('"')
-
-                if name_quote_start != -1:
-                    var name_quote_end = params_json.find(quote_char, name_quote_start + 1)
-                    if name_quote_end != -1:
-                        name = params_json[name_quote_start + 1:name_quote_end]
-
-
-        var args_start = params_json.find("'arguments'")
-        if args_start == -1:
-            args_start = params_json.find('"arguments"')
-
-        if args_start != -1:
-            var args_colon = params_json.find(':', args_start)
-            if args_colon != -1:
-                var args_brace_start = params_json.find('{', args_colon)
-                if args_brace_start != -1:
-                    var brace_count = 1
-                    var pos = args_brace_start + 1
-                    var args_end = -1
-
-                    while pos < len(params_json) and brace_count > 0:
-                        if params_json[pos] == '{':
-                            brace_count += 1
-                        elif params_json[pos] == '}':
-                            brace_count -= 1
-                            if brace_count == 0:
-                                args_end = pos + 1
-                                break
-                        pos += 1
-
-                    if args_end != -1:
-                        arguments = params_json[args_brace_start:args_end]
-                        arguments = arguments.replace("'", '"')
+        try:
+            arguments = parse_json_object(params_json, "arguments")
+        except:
+            # If arguments parsing fails, use default empty object
+            arguments = "{}"
 
         return ToolCallParams(name, arguments)
 

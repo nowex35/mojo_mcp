@@ -1,5 +1,5 @@
 from collections import Dict, List
-from .utils import current_time_ms, add_json_key_value, escape_json_string, JSONBuilder, JSONArrayBuilder
+from .utils import current_time_ms, add_json_key_value, escape_json_string, JSONBuilder, JSONArrayBuilder, parse_json_to_dict
 from time import sleep
 from lightbug_http._libc import fork, exit, kill, waitpid, SIGKILL, WNOHANG, c_int, pid_t
 from memory import UnsafePointer
@@ -149,25 +149,11 @@ struct MCPTool(Movable):
 
     fn _parse_json_arguments(self, arguments_json: String) -> Dict[String, String]:
         """Parse JSON arguments into a simple key-value map."""
-        var args = Dict[String, String]()
-
-        # Simplified JSON parsing - extract key-value pairs
-        # This is a basic implementation; in production, use a proper JSON parser
-        var json_str = arguments_json.strip()
-        if json_str.startswith("{") and json_str.endswith("}"):
-            json_str = json_str[1:-1]  # Remove braces
-
-            var pairs = json_str.split(",")
-            for i in range(len(pairs)):
-                var pair = pairs[i].strip()
-                if ":" in pair:
-                    var parts = pair.split(":", 1)
-                    if len(parts) >= 2:
-                        var key = String(parts[0].strip().strip('"'))
-                        var value = String(parts[1].strip())
-                        args[key] = value
-
-        return args
+        try:
+            return parse_json_to_dict(arguments_json)
+        except:
+            # Return empty dict on parse failure
+            return Dict[String, String]()
 
     fn _validate_parameter(self, param_def: MCPToolParameter, value: String) -> ParameterValidationResult:
         """Validate a single parameter against its definition."""

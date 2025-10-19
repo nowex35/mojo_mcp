@@ -410,3 +410,118 @@ struct JSONParser:
             return String(self._json_module.dumps(obj))
         except:
             return "{}"
+
+
+# ========== Simple JSON Parsing Helpers ==========
+
+fn parse_json_string(json_str: String, key: String, default: String = "") -> String:
+    """Parse a string value from JSON.
+
+    Args:
+        json_str: JSON string to parse.
+        key: Key name to extract.
+        default: Default value if key not found or parsing fails.
+
+    Returns:
+        The string value or default.
+    """
+    try:
+        var parser = JSONParser()
+        var obj = parser.parse(json_str)
+        return parser.get_string(obj, key, default)
+    except:
+        return default
+
+
+fn parse_json_int(json_str: String, key: String, default: Int = 0) -> Int:
+    """Parse an integer value from JSON.
+
+    Args:
+        json_str: JSON string to parse.
+        key: Key name to extract.
+        default: Default value if key not found or parsing fails.
+
+    Returns:
+        The integer value or default.
+    """
+    try:
+        var parser = JSONParser()
+        var obj = parser.parse(json_str)
+        return parser.get_int(obj, key, default)
+    except:
+        return default
+
+
+fn parse_json_object_string(json_str: String, parent_key: String, child_key: String, default: String = "") -> String:
+    """Parse a nested string value from JSON.
+
+    Args:
+        json_str: JSON string to parse.
+        parent_key: Parent object key name.
+        child_key: Child key name within parent object.
+        default: Default value if not found or parsing fails.
+
+    Returns:
+        The nested string value or default.
+
+    """
+    try:
+        var parser = JSONParser()
+        var obj = parser.parse(json_str)
+        var parent = parser.get_object(obj, parent_key)
+        return parser.get_string(parent, child_key, default)
+    except:
+        return default
+
+
+fn parse_json_to_dict(json_str: String) raises -> Dict[String, String]:
+    """Parse JSON object into a simple key-value dictionary.
+
+    Args:
+        json_str: JSON string to parse (must be an object).
+
+    Returns:
+        Dictionary with string keys and values.
+
+    Raises:
+        Error if parsing fails.
+
+    """
+    var result = Dict[String, String]()
+
+    try:
+        var parser = JSONParser()
+        var obj = parser.parse(json_str)
+
+        # Python dict iteration
+        var items = obj.items()
+        for item in items:
+            var key = String(item[0])
+            var value = String(item[1])
+            result[key] = value
+    except e:
+        raise Error("Failed to parse JSON to dict: " + String(e))
+
+    return result
+
+
+fn parse_json_object(json_str: String, key: String) raises -> String:
+    """Extract a nested JSON object as a string.
+
+    Args:
+        json_str: JSON string to parse.
+        key: Key name of the nested object.
+
+    Returns:
+        The nested object as a JSON string.
+
+    Raises:
+        Error if parsing fails or key not found.
+    """
+    try:
+        var parser = JSONParser()
+        var obj = parser.parse(json_str)
+        var nested = parser.get_object(obj, key)
+        return parser.to_json_string(nested)
+    except e:
+        raise Error("Failed to extract JSON object '" + key + "': " + String(e))

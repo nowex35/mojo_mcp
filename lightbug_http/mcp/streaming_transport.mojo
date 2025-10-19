@@ -2,8 +2,15 @@ from memory import Span
 from lightbug_http.io.bytes import bytes, Bytes, ByteView
 from lightbug_http.streaming.streamable_service import StreamableHTTPService
 from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
-from .jsonrpc import JSONRPCRequest, JSONRPCNotification, parse_error, invalid_request
-from .parser import JSONRPCParser, JSONRPCSerializer
+from .jsonrpc import (
+    JSONRPCRequest,
+    JSONRPCResponse,
+    JSONRPCNotification,
+    JSONRPCError,
+    parse_error,
+    invalid_request,
+    parse_message,
+)
 from .server import MCPServer
 from .messages import MCP_PROTOCOL_VERSION, is_compatible_version
 
@@ -352,22 +359,18 @@ struct StreamingTransport(StreamableHTTPService):
         Returns:
             The JSON-RPC response as a string
         """
-        var parser = JSONRPCParser()
-        var serializer = JSONRPCSerializer()
-
         # Extract session ID from headers
         var session_id = self._extract_session_id(exchange)
 
         try:
-            var message = parser.parse_message(json_body)
+            var message = parse_message(json_body)
 
             # Handle different message types
             if message.isa[JSONRPCRequest]():
                 var request = message[JSONRPCRequest]
                 # Pass session ID to handler for session management
                 var response = self.mcp_handler.handle_request_with_session(request, session_id)
-                var serialized_response = serializer.serialize_response(response)
-                return serialized_response
+                return response.to_json()
             elif message.isa[JSONRPCNotification]():
                 var notification = message[JSONRPCNotification]
                 self.mcp_handler.handle_notification_with_session(notification, session_id)
@@ -621,5 +624,5 @@ struct StreamingTransport(StreamableHTTPService):
         Returns:
             The error response as JSON string
         """
-        var serializer = JSONRPCSerializer()
-        return serializer.serialize_error_response(id, error)
+        var response = JSONRPCResponse.error_response(id, error)
+        return response.to_json()

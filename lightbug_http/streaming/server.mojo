@@ -7,7 +7,6 @@ from lightbug_http.http import encode
 from lightbug_http.http.common_response import InternalError, BadRequest, URITooLong
 from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
 from lightbug_http.streaming.streamable_service import StreamableHTTPService
-from lightbug_http.streaming.stream_manager import StreamManager
 from lightbug_http.streaming.shared_connection import SharedConnection
 from lightbug_http.error import ErrorHandler
 from lightbug_http.mcp.process import delete_zombies
@@ -37,7 +36,6 @@ struct StreamingServer(Movable):
     var _max_request_body_size: UInt
     var _max_request_uri_length: UInt
     var tcp_keep_alive: Bool
-    var _stream_manager: StreamManager
 
     fn __init__(
         out self,
@@ -48,7 +46,6 @@ struct StreamingServer(Movable):
         max_request_body_size: UInt = default_max_request_body_size,
         max_request_uri_length: UInt = default_max_request_uri_length,
         tcp_keep_alive: Bool = True,  # Streaming benefits from keep-alive
-        stream_timeout_seconds: Float64 = 300.0,
     ) raises:
         var error_handler = ErrorHandler()
         self.error_handler = error_handler
@@ -59,7 +56,6 @@ struct StreamingServer(Movable):
         self._max_request_uri_length = max_request_uri_length
         self.tcp_keep_alive = tcp_keep_alive
         self.max_concurrent_connections = max_concurrent_connections if max_concurrent_connections > 0 else 1000
-        self._stream_manager = StreamManager(stream_timeout_seconds)
 
     fn __moveinit__(out self, owned other: StreamingServer):
         self.error_handler = other.error_handler^
@@ -70,7 +66,6 @@ struct StreamingServer(Movable):
         self._max_request_body_size = other._max_request_body_size
         self._max_request_uri_length = other._max_request_uri_length
         self.tcp_keep_alive = other.tcp_keep_alive
-        self._stream_manager = other._stream_manager^
 
     fn address(self) -> ref [self._address] String:
         return self._address
@@ -162,9 +157,6 @@ struct StreamingServer(Movable):
                 except e:
                     logger.error("Failed to close connection in parent:", String(e))
 
-                # アイドルなストリームのクリーンアップ
-                _ = self._stream_manager.cleanup_idle_streams()
-
     fn serve_connection[T: StreamableHTTPService](
         mut self,
         shared_conn: SharedConnection,
@@ -242,11 +234,6 @@ struct StreamingServer(Movable):
                 shared_conn.teardown()
                 return
 
-            # Register the stream
-            var stream_id = self._stream_manager.generate_stream_id()
-            var session_id = self._stream_manager.generate_session_id()
-            self._stream_manager.register_stream(stream_id, session_id)
-
             var req_method = exchange.method
             var req_path = exchange.uri.path
 
@@ -262,9 +249,6 @@ struct StreamingServer(Movable):
                 print("[CONN] Handler error:", String(e))
 
             logger.debug(req_method, req_path, exchange.response_status_code, "(streaming)")
-
-            # Clean up the stream
-            _ = self._stream_manager.cleanup_stream(stream_id)
 
             # Handle errors and connection close
             if handler_error:

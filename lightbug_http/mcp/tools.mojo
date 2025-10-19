@@ -24,8 +24,8 @@ struct MCPToolParameter(Movable):
     var required: Bool
     var default_value: String  # JSON string representation
     var enum_values: List[String]  # For enum validation
-    
-    fn __init__(out self, name: String, type: MCPToolInputType, 
+
+    fn __init__(out self, name: String, type: MCPToolInputType,
                 description: String, required: Bool = True,
                 default_value: String = "", enum_values: List[String] = List[String]()):
         self.name = name
@@ -34,7 +34,7 @@ struct MCPToolParameter(Movable):
         self.required = required
         self.default_value = default_value
         self.enum_values = enum_values
-    
+
     fn to_json(self) -> String:
         """Convert parameter to JSON Schema format."""
         var json = String('{"type":"', escape_json_string(self.type), '","description":"', escape_json_string(self.description), '"')
@@ -64,7 +64,7 @@ struct MCPTool(Movable):
     var required_params: List[String]
     var version: String
     var enabled: Bool
-    
+
     fn __init__(out self, name: String, description: String,
                 parameters: MCPToolParameter,
                 version: String = "1.0.0", enabled: Bool = True):
@@ -89,13 +89,13 @@ struct MCPTool(Movable):
 
         for param in parameters:
             self.add_parameter(param)
-    
+
     fn add_parameter(mut self, param: MCPToolParameter):
         """Add a parameter to this tool."""
         self.input_schema[param.name] = param
         if param.required:
             self.required_params.append(param.name)
-    
+
     fn to_json(self) raises -> String:
         """Convert tool definition to MCP JSON format."""
         var json = String('{"name":"', escape_json_string(self.name), '","description":"', escape_json_string(self.description), '"')
@@ -127,43 +127,43 @@ struct MCPTool(Movable):
 
         json = json + "}"
         return json
-    
+
     fn validate_arguments(self, arguments_json: String) raises -> ValidationResult:
         """Validate provided arguments against the tool's schema."""
         var result = ValidationResult()
-        
+
         # Parse JSON arguments (simplified parsing)
         var parsed_args = self._parse_json_arguments(arguments_json)
-        
+
         # Check required parameters
         for required_param in self.required_params:
             if required_param not in parsed_args:
                 result.add_error("Missing required parameter: " + required_param)
-        
+
         # Validate parameter types and constraints
         for param_name in parsed_args:
             if param_name in self.input_schema:
                 var param_def = self.input_schema[param_name]
                 var param_value = parsed_args[param_name]
-                
+
                 var param_validation = self._validate_parameter(param_def, param_value)
                 if not param_validation.is_valid:
                     result.add_error("Parameter '" + param_name + "': " + param_validation.error_message)
             else:
                 result.add_warning("Unknown parameter: " + param_name)
-        
+
         return result
-    
+
     fn _parse_json_arguments(self, arguments_json: String) -> Dict[String, String]:
         """Parse JSON arguments into a simple key-value map."""
         var args = Dict[String, String]()
-        
+
         # Simplified JSON parsing - extract key-value pairs
         # This is a basic implementation; in production, use a proper JSON parser
         var json_str = arguments_json.strip()
         if json_str.startswith("{") and json_str.endswith("}"):
             json_str = json_str[1:-1]  # Remove braces
-            
+
             var pairs = json_str.split(",")
             for i in range(len(pairs)):
                 var pair = pairs[i].strip()
@@ -173,16 +173,16 @@ struct MCPTool(Movable):
                         var key = String(parts[0].strip().strip('"'))
                         var value = String(parts[1].strip())
                         args[key] = value
-        
+
         return args
-    
+
     fn _validate_parameter(self, param_def: MCPToolParameter, value: String) -> ParameterValidationResult:
         """Validate a single parameter against its definition."""
         var result = ParameterValidationResult()
-        
+
         # Remove quotes from string values
         var clean_value = String(value.strip().strip('"'))
-        
+
         # Type validation
         if param_def.type == TOOL_TYPE_STRING:
             # String validation - already clean
@@ -199,7 +199,7 @@ struct MCPTool(Movable):
                 result.is_valid = False
                 result.error_message = "Expected boolean (true/false), got: " + clean_value
                 return result
-        
+
         # Enum validation
         if len(param_def.enum_values) > 0:
             var valid_enum = False
@@ -207,28 +207,28 @@ struct MCPTool(Movable):
                 if clean_value == enum_value:
                     valid_enum = True
                     break
-            
+
             if not valid_enum:
                 result.is_valid = False
                 result.error_message = "Value must be one of: " + self._join_enum_values(param_def.enum_values)
                 return result
-        
+
         return result
-    
+
     fn _is_number(self, value: String) -> Bool:
         """Check if a string represents a valid number."""
         if len(value) == 0:
             return False
-        
+
         var has_dot = False
         var start_idx = 0
-        
+
         # Check for negative sign
         if len(value) > 0 and String(value[0]) == "-":
             start_idx = 1
             if len(value) == 1:
                 return False
-        
+
         # Check each character
         for i in range(start_idx, len(value)):
             var char = String(value[i])
@@ -238,9 +238,9 @@ struct MCPTool(Movable):
                 has_dot = True
             elif not (char >= "0" and char <= "9"):
                 return False  # Non-digit character
-        
+
         return True
-    
+
     fn _join_enum_values(self, enum_values: List[String]) -> String:
         """Join enum values into a readable string."""
         var result = String()
@@ -256,32 +256,32 @@ struct ValidationResult(Movable):
     var is_valid: Bool
     var errors: List[String]
     var warnings: List[String]
-    
+
     fn __init__(out self):
         self.is_valid = True
         self.errors = List[String]()
         self.warnings = List[String]()
-    
+
     fn add_error(mut self, message: String):
         """Add a validation error."""
         self.errors.append(message)
         self.is_valid = False
-    
+
     fn add_warning(mut self, message: String):
         """Add a validation warning."""
         self.warnings.append(message)
-    
+
     fn get_error_summary(self) -> String:
         """Get a summary of all errors."""
         if len(self.errors) == 0:
             return ""
-        
+
         var summary = String("Validation errors: ")
         for i in range(len(self.errors)):
             if i > 0:
                 summary = summary + "; "
             summary = summary + self.errors[i]
-        
+
         return summary
 
 @value
@@ -289,7 +289,7 @@ struct ParameterValidationResult(Movable):
     """Result of single parameter validation."""
     var is_valid: Bool
     var error_message: String
-    
+
     fn __init__(out self):
         self.is_valid = True
         self.error_message = ""
@@ -300,12 +300,12 @@ struct MCPToolContent(Movable):
     var type: String  # "text", "image", "resource"
     var data: String  # Text content, base64 data, or URI
     var mime_type: String  # MIME type for resources
-    
+
     fn __init__(out self, type: String, data: String, mime_type: String = ""):
         self.type = type
         self.data = data
         self.mime_type = mime_type
-    
+
     fn to_json(self) -> String:
         """Convert content to JSON format."""
         var json = String('{')
@@ -325,18 +325,18 @@ struct MCPToolContent(Movable):
         json = json + "}"
         return json
 
-@value 
+@value
 struct MCPToolResult(Movable):
     """Result of a tool execution."""
     var content: List[MCPToolContent]
     var is_error: Bool
     var error_message: String
-    
+
     fn __init__(out self, is_error: Bool = False, error_message: String = ""):
         self.content = List[MCPToolContent]()
         self.is_error = is_error
         self.error_message = error_message
-    
+
     fn add_text_content(mut self, text: String):
         """Add text content to the result."""
         var content = MCPToolContent("text", text)
@@ -356,7 +356,7 @@ struct MCPToolResult(Movable):
         """Add text content to the result."""
         var content = MCPToolContent("text", String(boolean))
         self.content.append(content)
-    
+
     fn to_json(self) -> String:
         """Convert result to MCP JSON format."""
         if self.is_error:
@@ -400,7 +400,6 @@ struct MCPToolResult(Movable):
                 if array_start != -1:
                     var depth = 0
                     var in_string = False
-                    var current_text = String()
 
                     # Simple parse of text content
                     for i in range(array_start, len(json_str)):
@@ -563,15 +562,15 @@ struct MCPToolRegistry(Movable):
         self.active_executions = Dict[String, ToolExecutionInfo]()
         self.next_execution_id = 0
         self.use_fork_timeout = False  # Default to off for safety and compatibility
-    
+
     fn register_tool(mut self, tool: MCPTool, executor: ToolExecutionFunc) raises:
         """Register a new tool with its executor function."""
         if tool.name in self.tools:
             raise Error("Tool already registered: " + tool.name)
-        
+
         self.tools[tool.name] = tool
         self.tool_executors[tool.name] = executor
-    
+
     fn list_tools(self) -> List[MCPTool]:
         """Get list of all registered tools."""
         var tool_list = List[MCPTool]()
@@ -583,7 +582,7 @@ struct MCPToolRegistry(Movable):
             except:
                 continue
         return tool_list
-    
+
     fn execute_tool(mut self, tool_name: String, arguments_json: String) raises -> MCPToolResult:
         """Execute a tool with the provided arguments and safety checks."""
         if not self.enabled:
@@ -899,7 +898,7 @@ fn create_number_parameter(name: String, description: String, required: Bool = T
 
 fn create_boolean_parameter(name: String, description: String, required: Bool = True,
                            default_value: String = "false") -> MCPToolParameter:
-    """Create a boolean parameter.""" 
+    """Create a boolean parameter."""
     return MCPToolParameter(name, TOOL_TYPE_BOOLEAN, description, required, default_value)
 
 fn create_enum_parameter(name: String, description: String, enum_values: List[String],

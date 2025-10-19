@@ -2,9 +2,10 @@ from memory import Span
 from lightbug_http.io.bytes import bytes, Bytes, ByteView
 from lightbug_http.streaming.streamable_service import StreamableHTTPService
 from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
-from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, parse_error, invalid_request, internal_error
-from .parser import JSONRPCParser, JSONRPCSerializer, MessageType
+from .jsonrpc import JSONRPCRequest, JSONRPCNotification, parse_error, invalid_request
+from .parser import JSONRPCParser, JSONRPCSerializer
 from .server import MCPServer
+from .messages import MCP_PROTOCOL_VERSION, is_compatible_version
 
 @value
 struct SSEEvent:
@@ -92,6 +93,7 @@ struct StreamingTransport(StreamableHTTPService):
             self._handle_mcp_request(exchange)
         elif path == "/health":
             self._handle_health_check(exchange)
+        # 後方互換性のために /sse エンドポイントをサポート
         elif path == "/sse":
             self._handle_sse_endpoint(exchange)
         else:
@@ -129,6 +131,13 @@ struct StreamingTransport(StreamableHTTPService):
             self._send_error(exchange, 405, "Method not allowed. Use POST or GET")
             return
 
+        # Validate MCP-Protocol-Version header (MCP spec 2025-06-18 requirement)
+        # Must be validated before routing to handlers
+        if not self._validate_protocol_version(exchange):
+            print("[MCP] Invalid or unsupported MCP-Protocol-Version")
+            self._send_error(exchange, 400, "Bad Request. Unsupported MCP-Protocol-Version")
+            return
+
         # GET is only for SSE endpoints
         if exchange.method == "GET":
             print("[MCP] GET request - routing to SSE handler")
@@ -158,25 +167,26 @@ struct StreamingTransport(StreamableHTTPService):
         for entry in exchange.headers._inner.items():
             print("[MCP]   ", entry.key, ":", entry.value)
 
-        # Read request body - handle both chunked and content-length
+        # Read request body
         var body = Bytes()
 
-        # Check if we have a Content-Length header
-        var has_content_length = "Content-Length" in exchange.headers
-
-        if has_content_length:
-            # We know how much to read
-            while True:
-                try:
-                    var chunk = exchange.read_body_chunk()
-                    if len(chunk) == 0:
-                        break
-                    body.extend(chunk^)
-                except:
-                    # EOF is expected when we've read everything
-                    break
-        else:
-            # No content length, read until EOF or empty chunk
+        # Try to read with Content-Length if available
+        try:
+            var content_length_str = exchange.headers["Content-Length"]
+            if content_length_str != "":
+                var content_length = atol(String(content_length_str))
+                if content_length > 0:
+                    # Read entire body at once when Content-Length is known
+                    var buffer = Bytes(capacity=content_length)
+                    var _ = exchange._connection.read(buffer)
+                    body = buffer^
+                else:
+                    # Content-Length is 0, no body to read
+                    pass
+            else:
+                raise Error("Empty Content-Length")
+        except:
+            # No Content-Length or invalid value, read in chunks until EOF
             while True:
                 try:
                     var chunk = exchange.read_body_chunk()
@@ -457,14 +467,44 @@ struct StreamingTransport(StreamableHTTPService):
 
         return False
 
+    fn _validate_protocol_version(self, exchange: StreamableHTTPExchange) raises -> Bool:
+        """Validate the MCP-Protocol-Version header.
+
+        MCP Spec 2025-06-18: Client MUST include MCP-Protocol-Version header
+        on all subsequent requests after initialization.
+
+        For backward compatibility: If header is missing, assume 2025-03-26.
+        However, this implementation only supports 2025-06-18, so missing
+        header results in rejection.
+
+        Args:
+            exchange: The streaming HTTP exchange.
+
+        Returns:
+            True if version is valid (2025-06-18), False otherwise.
+        """
+        if "MCP-Protocol-Version" not in exchange.headers:
+            # MCP Spec: Should assume 2025-03-26 if missing
+            # But this implementation only supports 2025-06-18
+            print("[MCP] Missing MCP-Protocol-Version header")
+            return False
+
+        var version = String(exchange.headers["MCP-Protocol-Version"].strip())
+
+        if not is_compatible_version(version):
+            print("[MCP] Unsupported protocol version:", version, "(expected:", MCP_PROTOCOL_VERSION, ")")
+            return False
+
+        return True
+
     fn _extract_session_id(self, exchange: StreamableHTTPExchange) raises -> String:
         """Extract session ID from Mcp-Session-Id header.
 
         Args:
-            exchange: The streaming HTTP exchange
+            exchange: The streaming HTTP exchange.
 
         Returns:
-            The session ID, or empty string if not present
+            The session ID, or empty string if not present.
         """
         if "Mcp-Session-Id" in exchange.headers:
             var session_id = String(exchange.headers["Mcp-Session-Id"].strip())

@@ -1,5 +1,5 @@
 from collections import Dict
-from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONRPCError
+from .jsonrpc import JSONRPCRequest, JSONRPCNotification, JSONRPCError
 from .utils import current_time_ms
 
 # Timeout constants (in milliseconds)

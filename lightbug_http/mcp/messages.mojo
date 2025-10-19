@@ -1,4 +1,4 @@
-from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification
+from .jsonrpc import JSONRPCResponse, JSONRPCNotification
 from .utils import current_time_ms
 
 # MCP Protocol Version
@@ -9,15 +9,15 @@ struct MCPClientInfo(Movable):
     """Information about the MCP client."""
     var name: String
     var version: String
-    
+
     fn __init__(out self, name: String, version: String):
         self.name = name
         self.version = version
-    
+
     fn to_json(self) -> String:
         return String('{"name":"', self.name, '","version":"', self.version, '"}')
 
-@value 
+@value
 struct MCPServerInfo(Movable):
     """Information about the MCP server."""
     var name: String
@@ -26,7 +26,7 @@ struct MCPServerInfo(Movable):
     fn __init__(out self, name: String, version: String):
         self.name = name
         self.version = version
-    
+
     fn to_json(self) -> String:
         return String('{"name":"', self.name, '","version":"', self.version, '"}')
 
@@ -39,9 +39,9 @@ struct MCPCapabilities(Movable):
     var logging: Bool
     var roots: Bool
     var sampling: Bool
-    
+
     fn __init__(
-        out self, 
+        out self,
         tools: Bool = False,
         resources: Bool = False,
         prompts: Bool = False,
@@ -55,7 +55,7 @@ struct MCPCapabilities(Movable):
         self.logging = logging
         self.roots = roots
         self.sampling = sampling
-    
+
     fn to_json(self) -> String:
         var json = String("{")
         var first = True
@@ -110,17 +110,17 @@ fn is_mcp_method(method: String) -> Bool:
     """Check if a method name is a valid MCP method."""
     var mcp_methods = ["initialize", "initialized"]
     var mcp_prefixes = ["tools/", "resources/", "prompts/", "logging/", "roots/", "sampling/"]
-    
+
     # Check exact matches
     for mcp_method in mcp_methods:
         if method == mcp_method:
             return True
-    
+
     # Check prefix matches
     for prefix in mcp_prefixes:
         if method.startswith(prefix):
             return True
-    
+
     return False
 
 # Protocol version validation
@@ -135,13 +135,13 @@ struct MCPMessage(Movable):
     var method: String
     var timestamp: Int
     var raw_json: String
-    
+
     fn __init__(out self, request_id: String, method: String, raw_json: String):
         self.request_id = request_id
         self.method = method
         self.timestamp = current_time_ms()
         self.raw_json = raw_json
-    
+
     fn is_valid_mcp_message(self) -> Bool:
         """Check if this is a valid MCP message."""
         return is_mcp_method(self.method)

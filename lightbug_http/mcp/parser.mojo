@@ -5,8 +5,6 @@ from .jsonrpc import (
     JSONRPCResponse,
     JSONRPCNotification,
     JSONRPCError,
-    parse_error,
-    invalid_request
 )
 
 alias MessageType = Variant[JSONRPCRequest, JSONRPCResponse, JSONRPCNotification]

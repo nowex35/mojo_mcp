@@ -1,7 +1,6 @@
 from collections import Dict
 from python import Python
-from random import random_si64
-from .utils import generate_session_id, current_time_ms
+from .utils import  current_time_ms
 
 # Session states
 alias SessionState = Int
@@ -187,8 +186,3 @@ struct SessionManager(Movable):
         var event_id = session.next_event_id()
         self.sessions[session_id] = session  # Update session with new counter
         return event_id
-
-# Utility functions
-fn create_session_manager() -> SessionManager:
-    """Create a new session manager with default configuration."""
-    return SessionManager()

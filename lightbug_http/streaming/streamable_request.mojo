@@ -1,5 +1,5 @@
 from memory import Span
-from lightbug_http.io.bytes import Bytes, bytes, ByteReader, ByteWriter
+from lightbug_http.io.bytes import Bytes, bytes, ByteReader
 from lightbug_http.header import Headers, HeaderKey
 from lightbug_http.cookie import RequestCookieJar
 from lightbug_http.uri import URI

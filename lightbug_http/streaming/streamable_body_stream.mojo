@@ -1,7 +1,6 @@
 from memory import Span
 from lightbug_http.io.bytes import Bytes, ByteWriter, bytes
 from lightbug_http.connection import TCPConnection
-from lightbug_http.io.sync import Duration
 from lightbug_http.mcp.utils import hex
 
 

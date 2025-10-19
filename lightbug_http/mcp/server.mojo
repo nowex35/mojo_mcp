@@ -1,14 +1,12 @@
 from collections import Dict
-from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONRPCError, method_not_found, invalid_params, internal_error, server_not_initialized, unsupported_protocol_version, tool_not_found, tool_execution_failed, feature_not_implemented, log_error
+from .jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONRPCError, method_not_found, internal_error, unsupported_protocol_version, tool_execution_failed, log_error, server_not_initialized
 from .messages import MCPServerInfo, MCPCapabilities, create_initialize_response, MCP_PROTOCOL_VERSION, is_compatible_version
-from .transport import MCPHandler
-from .session import SessionManager, MCPSession
-from .tools import MCPTool, MCPToolResult, MCPToolRegistry, ToolExecutionFunc, create_string_parameter
+from .session import SessionManager
+from .tools import MCPTool, MCPToolRegistry, ToolExecutionFunc
 from .utils import generate_uuid, current_time_ms
-from .timeout import TimeoutManager, TimeoutConfig, CancellationNotification, ProgressNotification, create_timeout_error, create_cancellation_error
+from .timeout import TimeoutManager, TimeoutConfig, CancellationNotification, create_cancellation_error
 from lightbug_http.streaming.server import StreamingServer
 from .streaming_transport import StreamingTransport
-from .transport import HTTPTransport
 
 # Connection states
 alias ConnectionState = Int
@@ -18,6 +16,26 @@ alias INITIALIZING: ConnectionState = 2
 alias INITIALIZED: ConnectionState = 3
 alias READY: ConnectionState = 4
 alias ERROR: ConnectionState = 5
+
+# Forward declaration for the handler interface
+trait MCPHandler:
+    """Interface for handling MCP messages."""
+
+    fn handle_request(mut self, request: JSONRPCRequest) raises -> JSONRPCResponse:
+        """Handle a JSON-RPC request and return a response."""
+        pass
+
+    fn handle_notification(mut self, notification: JSONRPCNotification) raises:
+        """Handle a JSON-RPC notification (no response expected)."""
+        pass
+
+    fn handle_request_with_session(mut self, request: JSONRPCRequest, session_id: String) raises -> JSONRPCResponse:
+        """Handle a JSON-RPC request with session management and return a response."""
+        pass
+
+    fn handle_notification_with_session(mut self, notification: JSONRPCNotification, session_id: String) raises:
+        """Handle a JSON-RPC notification with session management (no response expected)."""
+        pass
 
 @value
 struct MCPConnection(Movable):

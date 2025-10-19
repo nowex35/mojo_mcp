@@ -1,5 +1,4 @@
 from python import Python
-from utils import Variant
 
 alias JSONRPCVersion = "2.0"
 
@@ -14,16 +13,16 @@ alias INTERNAL_ERROR = -32603
 @value
 struct JSONRPCError(Movable):
     """JSON-RPC 2.0 Error object."""
-    
+
     var code: Int # エラーコード
     var message: String # エラーメッセージ
     var data: String  # オプションの追加エラーデータとしてJSON文字列
-    
+
     fn __init__(out self, code: Int, message: String, data: String = ""):
         self.code = code
         self.message = message
         self.data = data
-    
+
     fn to_json(self) -> String:
         """Convert error to JSON string."""
         var json = String('{"code":', String(self.code), ',"message":"', self.message, '"')
@@ -35,117 +34,117 @@ struct JSONRPCError(Movable):
 @value
 struct JSONRPCRequest(Movable):
     """JSON-RPC 2.0 Request message.
-    
+
     Must include:
     - jsonrpc: "2.0"
     - id: string or number (non-null)
     - method: string
     - params: object (optional)
     """
-    
+
     var jsonrpc: String # JSON-RPCバージョン
     var id: String  # Can be string or number, stored as string
     var method: String # メソッド名 "tools/call"や"initialize"など。
     var params: String  # JSON string for parameters
-    
+
     fn __init__(out self, id: String, method: String, params: String = "{}"):
         self.jsonrpc = JSONRPCVersion
         self.id = id
         self.method = method
         self.params = params
-    
+
     fn __init__(out self, id: Int, method: String, params: String = "{}"):
         self.jsonrpc = JSONRPCVersion
         self.id = String(id)
         self.method = method
         self.params = params
-    
+
     fn to_json(self) -> String:
         """Convert request to JSON string."""
-        var json = String('{"jsonrpc":"', self.jsonrpc, '","id":"', self.id, 
+        var json = String('{"jsonrpc":"', self.jsonrpc, '","id":"', self.id,
                          '","method":"', self.method, '"')
         if self.params != "{}":
             json = json + ',"params":' + self.params
         json = json + "}"
         return json
-    
+
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC request format."""
-        return (self.jsonrpc == JSONRPCVersion and 
-                len(self.id) > 0 and 
+        return (self.jsonrpc == JSONRPCVersion and
+                len(self.id) > 0 and
                 len(self.method) > 0)
 
 @value
 struct JSONRPCResponse(Movable):
     """JSON-RPC 2.0 Response message.
-    
+
     Must include:
     - jsonrpc: "2.0"
     - id: matching the request id
     - result OR error (but not both)
     """
-    
+
     var jsonrpc: String
     var id: String
     var result: String  # JSON string for result
     var error: String   # JSON string for error (empty if success)
-    
+
     fn __init__(out self, id: String, result: String = "", error: String = ""):
         self.jsonrpc = JSONRPCVersion
         self.id = id
         self.result = result
         self.error = error
-    
+
     @staticmethod
     fn success(id: String, result: String) -> JSONRPCResponse:
         """Create a success response."""
         return JSONRPCResponse(id, result, "")
-    
+
     @staticmethod
     fn error_response(id: String, error: JSONRPCError) -> JSONRPCResponse:
         """Create an error response."""
         return JSONRPCResponse(id, "", error.to_json())
-    
+
     fn to_json(self) -> String:
         """Convert response to JSON string."""
         var json = String('{"jsonrpc":"', self.jsonrpc, '","id":"', self.id, '"')
-        
+
         if self.error:
             json = json + ',"error":' + self.error
         else:
             json = json + ',"result":' + self.result
-        
+
         json = json + "}"
         return json
-    
+
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC response format."""
-        return (self.jsonrpc == JSONRPCVersion and 
+        return (self.jsonrpc == JSONRPCVersion and
                 len(self.id) > 0 and
                 (len(self.result) > 0) != (len(self.error) > 0))  # XOR: exactly one should be present
 
 @value
 struct JSONRPCNotification(Movable):
     """JSON-RPC 2.0 Notification message.
-    
+
     Must include:
     - jsonrpc: "2.0"
     - method: string
     - params: object (optional)
-    
+
     Must NOT include:
     - id
     """
-    
+
     var jsonrpc: String
     var method: String
     var params: String  # JSON string for parameters
-    
+
     fn __init__(out self, method: String, params: String = "{}"):
         self.jsonrpc = JSONRPCVersion
         self.method = method
         self.params = params
-    
+
     fn to_json(self) -> String:
         """Convert notification to JSON string."""
         var json = String('{"jsonrpc":"', self.jsonrpc, '","method":"', self.method, '"')
@@ -153,10 +152,10 @@ struct JSONRPCNotification(Movable):
             json = json + ',"params":' + self.params
         json = json + "}"
         return json
-    
+
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC notification format."""
-        return (self.jsonrpc == JSONRPCVersion and 
+        return (self.jsonrpc == JSONRPCVersion and
                 len(self.method) > 0)
 
 # Standard JSON-RPC errors

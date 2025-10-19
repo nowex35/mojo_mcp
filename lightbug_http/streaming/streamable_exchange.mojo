@@ -1,12 +1,10 @@
 from memory import Span
 from collections import Optional
-from lightbug_http.io.bytes import Bytes, ByteReader, ByteWriter, bytes, ByteView
+from lightbug_http.io.bytes import Bytes, ByteReader, ByteWriter, bytes
 from lightbug_http.header import Headers, HeaderKey
 from lightbug_http.cookie import RequestCookieJar
 from lightbug_http.uri import URI
-from lightbug_http.connection import TCPConnection
-from lightbug_http.io.sync import Duration
-from lightbug_http.strings import strHttp11, BytesConstant
+from lightbug_http.strings import BytesConstant
 from lightbug_http.mcp.utils import hex
 from lightbug_http.streaming.shared_connection import SharedConnection
 

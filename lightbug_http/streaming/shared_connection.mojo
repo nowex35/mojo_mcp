@@ -25,6 +25,17 @@ struct SharedConnection:
         self._owned = other._owned
         other._owned = False
 
+    fn __del__(owned self):
+        """Destructor - clean up the connection."""
+        try:
+            if self._owned:
+                self._connection[].teardown()
+            # Always free the pointer, even if not owned
+            self._connection.free()
+        except:
+            # Ignore errors during cleanup
+            pass
+
     fn read(self, mut buffer: Bytes) raises -> Int:
         """Read from the connection."""
         return self._connection[].read(buffer)
@@ -43,3 +54,11 @@ struct SharedConnection:
         """Get remote address information."""
         var conn_ptr = self._connection
         return conn_ptr[].socket._remote_address.ip + ":" + String(conn_ptr[].socket._remote_address.port)
+
+    fn release_ownership(mut self):
+        """Release ownership of the connection without closing it.
+
+        This is useful when forking processes where the child process
+        should take full ownership of the connection.
+        """
+        self._owned = False

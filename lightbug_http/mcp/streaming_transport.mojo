@@ -125,10 +125,16 @@ struct StreamingTransport(StreamableHTTPService):
         Args:
             exchange: The streaming HTTP exchange
         """
-        # Only accept POST and GET requests
-        if exchange.method != "POST" and exchange.method != "GET":
+        # Only accept POST requests for MCP JSON-RPC
+        # GET requests on the main endpoint are not part of MCP spec
+        if exchange.method == "GET":
+            print("[MCP] GET request on MCP endpoint - returning info")
+            self._send_mcp_info(exchange)
+            return
+
+        if exchange.method != "POST":
             print("[MCP] Rejecting unsupported method:", exchange.method)
-            self._send_error(exchange, 405, "Method not allowed. Use POST or GET")
+            self._send_error(exchange, 405, "Method not allowed. Use POST for MCP JSON-RPC")
             return
 
         # Validate MCP-Protocol-Version header (MCP spec 2025-06-18 requirement)
@@ -136,12 +142,6 @@ struct StreamingTransport(StreamableHTTPService):
         if not self._validate_protocol_version(exchange):
             print("[MCP] Invalid or unsupported MCP-Protocol-Version")
             self._send_error(exchange, 400, "Bad Request. Unsupported MCP-Protocol-Version")
-            return
-
-        # GET is only for SSE endpoints
-        if exchange.method == "GET":
-            print("[MCP] GET request - routing to SSE handler")
-            self._handle_sse_request(exchange)
             return
 
         # Validate Accept header (MCP spec requirement)
@@ -167,35 +167,24 @@ struct StreamingTransport(StreamableHTTPService):
         for entry in exchange.headers._inner.items():
             print("[MCP]   ", entry.key, ":", entry.value)
 
-        # Read request body
+        # Read request body using read_body_chunk to properly handle buffered data
         var body = Bytes()
 
-        # Try to read with Content-Length if available
-        try:
-            var content_length_str = exchange.headers["Content-Length"]
-            if content_length_str != "":
-                var content_length = atol(String(content_length_str))
-                if content_length > 0:
-                    # Read entire body at once when Content-Length is known
-                    var buffer = Bytes(capacity=content_length)
-                    var _ = exchange._connection.read(buffer)
-                    body = buffer^
-                else:
-                    # Content-Length is 0, no body to read
-                    pass
-            else:
-                raise Error("Empty Content-Length")
-        except:
-            # No Content-Length or invalid value, read in chunks until EOF
-            while True:
-                try:
-                    var chunk = exchange.read_body_chunk()
-                    if len(chunk) == 0:
-                        break
-                    body.extend(chunk^)
-                except:
-                    # EOF means we're done
+        # Read body in chunks (this handles both buffered_body and Content-Length correctly)
+        while True:
+            try:
+                var chunk = exchange.read_body_chunk()
+                if len(chunk) == 0:
                     break
+                body.extend(chunk^)
+            except e:
+                # EOF or error means we're done
+                if String(e) == "EOF":
+                    break
+                # For other errors, try to continue if we have some data
+                if len(body) > 0:
+                    break
+                raise e
 
         # Convert Bytes to String
         var body_str: String
@@ -473,21 +462,20 @@ struct StreamingTransport(StreamableHTTPService):
         MCP Spec 2025-06-18: Client MUST include MCP-Protocol-Version header
         on all subsequent requests after initialization.
 
-        For backward compatibility: If header is missing, assume 2025-03-26.
-        However, this implementation only supports 2025-06-18, so missing
-        header results in rejection.
+        For backward compatibility: If header is missing, assume 2025-03-26
+        and allow the request to proceed. The server will negotiate the actual
+        version during initialization.
 
         Args:
             exchange: The streaming HTTP exchange.
 
         Returns:
-            True if version is valid (2025-06-18), False otherwise.
+            True if version is valid or missing (backward compatibility), False if unsupported version is specified.
         """
         if "MCP-Protocol-Version" not in exchange.headers:
-            # MCP Spec: Should assume 2025-03-26 if missing
-            # But this implementation only supports 2025-06-18
-            print("[MCP] Missing MCP-Protocol-Version header")
-            return False
+            # MCP Spec: Assume 2025-03-26 if missing for backward compatibility
+            print("[MCP] Missing MCP-Protocol-Version header - assuming legacy client, will negotiate during initialization")
+            return True
 
         var version = String(exchange.headers["MCP-Protocol-Version"].strip())
 
@@ -595,11 +583,33 @@ struct StreamingTransport(StreamableHTTPService):
             self._add_cors_headers(exchange)
             exchange.add_header("Content-Type", "application/json")
             var error_json = String('{"error":"') + message + String('"}')
-            exchange.write_chunk(bytes(error_json))
-            exchange.end_stream()
+            var error_body = bytes(error_json)
+            exchange.add_header("Content-Length", String(len(error_body)))
+            exchange._use_chunked_encoding = False
+            exchange.send_headers()
+            exchange.write_chunk(error_body)
         except:
             # If we can't send the error, at least close cleanly
             pass
+
+    fn _send_mcp_info(mut self, mut exchange: StreamableHTTPExchange) raises:
+        """Send MCP server information for GET requests.
+
+        Args:
+            exchange: The streaming HTTP exchange
+        """
+        exchange.set_status(200)
+        self._add_cors_headers(exchange)
+        exchange.add_header("Content-Type", "application/json")
+
+        var info = bytes('{"service":"mcp-server","protocol":"JSON-RPC 2.0","message":"Use POST method to send MCP JSON-RPC requests","endpoints":{"/":"MCP JSON-RPC endpoint (POST)","/health":"Health check","/sse":"Server-Sent Events (GET)"}}')
+        exchange.add_header("Content-Length", String(len(info)))
+        exchange._use_chunked_encoding = False
+
+        exchange.send_headers()
+        exchange.write_chunk(info)
+
+        print("[MCP] Server info response sent")
 
     fn _create_error_response(self, id: String, error: JSONRPCError) -> String:
         """Create a JSON-RPC error response.

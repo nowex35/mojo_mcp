@@ -147,11 +147,10 @@ struct StreamingServer(Movable):
             # 親プロセスではfork関数が返り値としてpid=子プロセスIDを返す
             # なお子プロセスよりも先に親プロセスが死んだ場合、里親のような形で代わりにPID=1のinitプロセスが引き取る
             elif pid > 0:
-                try:
-                    # 親プロセスはクライアント接続を閉じ、リスニングに専念する
-                    shared_conn.teardown()
-                except e:
-                    logger.error("Failed to close connection in parent:", String(e))
+                # 親プロセスは接続の所有権を子プロセスに譲渡する
+                # fork()後、親と子は独立したメモリを持つが、ファイルディスクリプタは共有される
+                # 親側で所有権を放棄することで、子プロセスだけがteardown()でクローズできる
+                shared_conn.release_ownership()
 
     fn serve_connection[T: StreamableHTTPService](
         mut self,

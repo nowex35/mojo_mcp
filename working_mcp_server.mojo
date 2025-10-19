@@ -65,4 +65,4 @@ fn main() raises:
         executor=example_slow_tool
     )
 
-    mcp_server.start(address="127.0.0.1:8083")
+    mcp_server.start(address="127.0.0.1:8082")

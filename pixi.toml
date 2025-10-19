@@ -1,0 +1,12 @@
+[workspace]
+authors = ["nowex35 <a.hayate0726@gmail.com>"]
+channels = ["https://conda.modular.com/max-nightly","https://conda.modular.com/max", "https://repo.prefix.dev/modular-community",  "conda-forge"]
+channel-priority = "disabled"
+name = "lightbug-mcp"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+modular = "==25.4.0"

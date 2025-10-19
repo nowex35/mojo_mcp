@@ -1,0 +1,23 @@
+*.📦
+*.mojopkg
+.DS_Store
+.mojoenv
+install_id
+
+# pixi environments
+.pixi
+*.egg-info
+
+# magic environments
+.magic
+
+# Rattler
+output
+
+# integration tests
+udp_client.DSYM
+udp_server.DSYM
+__pycache__
+
+# misc
+.vscode

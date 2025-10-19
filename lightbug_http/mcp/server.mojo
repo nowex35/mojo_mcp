@@ -426,10 +426,13 @@ struct MCPServer(MCPHandler):
 
                 var result = self.tools_registry.execute_tool(tool_info.name, tool_info.arguments)
 
+                # Return the result as a successful JSON-RPC response
+                # (tool execution errors are encoded in the result content)
                 return JSONRPCResponse.success(request.id, result.to_json())
 
             except e:
-                var error = tool_execution_failed("unknown", "execution error")
+                # This handles parsing errors or unexpected failures
+                var error = tool_execution_failed("unknown", String(e))
                 log_error(error, "tools_call")
                 return JSONRPCResponse.error_response(request.id, error)
         else:
@@ -532,7 +535,7 @@ struct MCPServer(MCPHandler):
     fn _parse_tool_call_params(self, params_json: String) raises -> ToolCallParams:
         """Parse tool call parameters from JSON."""
         var name = parse_json_string(params_json, "name", "unknown")
-        var arguments = String("{}")
+        var arguments: String
 
         try:
             arguments = parse_json_object(params_json, "arguments")
@@ -701,17 +704,20 @@ struct ToolsHandler(RequestHandler):
 
             var result = self.tools_registry.execute_tool(tool_info.name, tool_info.arguments)
 
+            # Check if the result is an error and return it as a successful response
+            # (the error is in the result content, not a JSON-RPC error)
             return JSONRPCResponse.success(request.id, result.to_json())
 
         except e:
-            var error = tool_execution_failed("unknown", "execution error")
+            # This handles parsing errors or unexpected failures
+            var error = tool_execution_failed("unknown", String(e))
             log_error(error, "tools_call")
             return JSONRPCResponse.error_response(request.id, error)
 
     fn _parse_tool_call_params(self, params_json: String) raises -> ToolCallParams:
         """Parse tool call parameters from JSON."""
         var name = parse_json_string(params_json, "name", "unknown")
-        var arguments = String("{}")
+        var arguments: String
 
         try:
             arguments = parse_json_object(params_json, "arguments")

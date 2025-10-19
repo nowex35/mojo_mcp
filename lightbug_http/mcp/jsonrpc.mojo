@@ -108,7 +108,13 @@ struct JSONRPCRequest(Movable):
 
         var id_str = String(data["id"]) if "id" in data else ""
         var method = String(data["method"])
-        var params = String(data.get("params", "{}"))
+
+        # Convert params back to JSON string (not Python repr)
+        var params: String
+        if "params" in data:
+            params = String(json.dumps(data["params"]))
+        else:
+            params = "{}"
 
         var request = JSONRPCRequest(id_str, method, params)
         if not request.is_valid():
@@ -251,7 +257,13 @@ struct JSONRPCNotification(Movable):
             raise Error("Notification missing required 'method' field")
 
         var method = String(data["method"])
-        var params = String(data.get("params", "{}"))
+
+        # Convert params back to JSON string (not Python repr)
+        var params: String
+        if "params" in data:
+            params = String(json.dumps(data["params"]))
+        else:
+            params = "{}"
 
         var notification = JSONRPCNotification(method, params)
         if not notification.is_valid():

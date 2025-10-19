@@ -30,8 +30,7 @@ struct SharedConnection:
         try:
             if self._owned:
                 self._connection[].teardown()
-            # Always free the pointer, even if not owned
-            self._connection.free()
+                self._connection.free()
         except:
             # Ignore errors during cleanup
             pass
@@ -48,7 +47,6 @@ struct SharedConnection:
         """Close the connection if owned."""
         if self._owned:
             self._connection[].teardown()
-            self._connection.free()
 
     fn get_remote_address(self) -> String:
         """Get remote address information."""
@@ -62,3 +60,7 @@ struct SharedConnection:
         should take full ownership of the connection.
         """
         self._owned = False
+
+    fn is_closed(self) -> Bool:
+        """Check if the underlying connection is closed."""
+        return self._connection[].is_closed()

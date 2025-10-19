@@ -184,6 +184,11 @@ struct StreamingServer(Movable):
             req_number += 1
             print("[CONN] Request #" + String(req_number) + " on this connection")
 
+            # Check if connection is still valid before attempting to read
+            if shared_conn.is_closed():
+                print("[CONN] Connection is closed, exiting keep-alive loop")
+                return
+
             # Read headers
             var header_buffer = Bytes()
             while True:
@@ -207,12 +212,23 @@ struct StreamingServer(Movable):
                         break
 
                 except e:
-                    print("[CONN] Error reading headers:", String(e))
-                    shared_conn.teardown()
-                    if String(e) == "EOF":
+                    var error_msg = String(e)
+                    print("[CONN] Error reading headers:", error_msg)
+
+                    # Handle different types of connection errors gracefully
+                    if "EOF" in error_msg or "invalid descriptor" in error_msg or "not associated with a socket" in error_msg or "closed" in error_msg.lower():
+                        print("[CONN] Client closed connection")
+                        try:
+                            shared_conn.teardown()
+                        except:
+                            pass
                         return
                     else:
-                        logger.error("Failed to read headers:", String(e))
+                        logger.error("Failed to read headers:", error_msg)
+                        try:
+                            shared_conn.teardown()
+                        except:
+                            pass
                         return
 
             # リクエスト及びレスポンスを扱うExchangeを作成.名前を変更したい

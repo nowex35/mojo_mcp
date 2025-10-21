@@ -3,10 +3,7 @@
         "allow": [
             "Bash(npm run lint)",
             "Bash(npm run test:*)",
-            "mcp__serena__activate_project",
-            "mcp__serena__check_onboarding_performed",
-            "mcp__serena__read_file",
-            "mcp__serena__list_dir"
+            "mcp__serena"
         ],
         "deny": [
             "Read(.env)",

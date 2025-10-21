@@ -14,15 +14,7 @@ alias default_max_request_uri_length = 8192
 
 
 struct StreamingServer(Movable):
-    """A streaming-capable HTTP server for Mojo.
-
-    This server supports both traditional HTTP request/response handling
-    and streaming patterns including:
-    - Chunked transfer encoding
-    - Server-Sent Events (SSE)
-    - Large file uploads/downloads
-    - Real-time bidirectional communication
-    """
+    """A streaming-capable HTTP server for Mojo."""
 
     var error_handler: ErrorHandler
     var name: String

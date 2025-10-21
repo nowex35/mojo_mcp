@@ -4,21 +4,6 @@ from .utils import current_time_ms, JSONBuilder
 # MCP Protocol Version
 alias MCP_PROTOCOL_VERSION = "2025-06-18"
 
-@value
-struct MCPClientInfo(Movable):
-    """Information about the MCP client."""
-    var name: String
-    var version: String
-
-    fn __init__(out self, name: String, version: String):
-        self.name = name
-        self.version = version
-
-    fn to_json(self) -> String:
-        var builder = JSONBuilder()
-        builder.add_string("name", self.name)
-        builder.add_string("version", self.version)
-        return builder.build()
 
 @value
 struct MCPServerInfo(Movable):
@@ -118,21 +103,3 @@ fn is_mcp_method(method: String) -> Bool:
 fn is_compatible_version(version: String) -> Bool:
     """Check if a protocol version is compatible with this implementation."""
     return version == MCP_PROTOCOL_VERSION
-
-@value
-struct MCPMessage(Movable):
-    """Wrapper for MCP messages with metadata."""
-    var request_id: String
-    var method: String
-    var timestamp: Int
-    var raw_json: String
-
-    fn __init__(out self, request_id: String, method: String, raw_json: String):
-        self.request_id = request_id
-        self.method = method
-        self.timestamp = current_time_ms()
-        self.raw_json = raw_json
-
-    fn is_valid_mcp_message(self) -> Bool:
-        """Check if this is a valid MCP message."""
-        return is_mcp_method(self.method)

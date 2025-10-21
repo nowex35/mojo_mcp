@@ -5,7 +5,6 @@ from .utils import JSONBuilder, escape_json_string
 alias JSONRPCVersion = "2.0"
 
 # Forward declarations for MessageType
-# (Actual structs defined below)
 alias MessageType = Variant[JSONRPCRequest, JSONRPCResponse, JSONRPCNotification]
 
 # JSON-RPC 2.0 standard error codes
@@ -45,14 +44,7 @@ struct JSONRPCError(Movable):
 
 @value
 struct JSONRPCRequest(Movable):
-    """JSON-RPC 2.0 Request message.
-
-    Must include:
-    - jsonrpc: "2.0"
-    - id: string or number (non-null)
-    - method: string
-    - params: object (optional)
-    """
+    """JSON-RPC 2.0 Request message."""
 
     var jsonrpc: String # JSON-RPCバージョン
     var id: String  # Can be string or number, stored as string
@@ -124,13 +116,7 @@ struct JSONRPCRequest(Movable):
 
 @value
 struct JSONRPCResponse(Movable):
-    """JSON-RPC 2.0 Response message.
-
-    Must include:
-    - jsonrpc: "2.0"
-    - id: matching the request id
-    - result OR error (but not both)
-    """
+    """JSON-RPC 2.0 Response message."""
 
     var jsonrpc: String
     var id: String
@@ -203,16 +189,7 @@ struct JSONRPCResponse(Movable):
 
 @value
 struct JSONRPCNotification(Movable):
-    """JSON-RPC 2.0 Notification message.
-
-    Must include:
-    - jsonrpc: "2.0"
-    - method: string
-    - params: object (optional)
-
-    Must NOT include:
-    - id
-    """
+    """JSON-RPC 2.0 Notification message."""
 
     var jsonrpc: String
     var method: String
@@ -234,22 +211,11 @@ struct JSONRPCNotification(Movable):
 
     fn is_valid(self) -> Bool:
         """Validate JSON-RPC notification format."""
-        return (self.jsonrpc == JSONRPCVersion and
-                len(self.method) > 0)
+        return (self.jsonrpc == JSONRPCVersion and len(self.method) > 0)
 
     @staticmethod
     fn from_json(json_str: String) raises -> JSONRPCNotification:
-        """Parse JSONRPCNotification from JSON string.
-
-        Args:
-            json_str: JSON string to parse
-
-        Returns:
-            Parsed JSONRPCNotification
-
-        Raises:
-            Error if parsing fails or notification is invalid
-        """
+        """Parse JSONRPCNotification from JSON string."""
         var json = Python.import_module("json")
         var data = json.loads(json_str)
 
@@ -258,7 +224,7 @@ struct JSONRPCNotification(Movable):
 
         var method = String(data["method"])
 
-        # Convert params back to JSON string (not Python repr)
+        # Convert params back to JSON string
         var params: String
         if "params" in data:
             params = String(json.dumps(data["params"]))
@@ -316,10 +282,6 @@ fn tool_execution_failed(tool_name: String, reason: String) -> JSONRPCError:
 
 
 # Utility function to create custom errors
-fn create_error(code: Int, message: String) -> JSONRPCError:
-    """Create a custom JSON-RPC error."""
-    return JSONRPCError(code, message)
-
 fn log_error(error: JSONRPCError, context: String = ""):
     """Log an error for debugging to stderr (MCP-compliant)."""
     var log_message = "JSON-RPC Error: " + error.message
@@ -369,51 +331,3 @@ fn parse_message(json_str: String) raises -> MessageType:
 
     except e:
         raise Error("Failed to parse JSON-RPC message: " + String(e))
-
-
-# Utility functions for creating responses (replaces JSONRPCSerializer functionality)
-fn create_error_response(id: String, code: Int, message: String, data: String = "") -> String:
-    """Create a JSON-RPC error response.
-
-    Args:
-        id: Request ID
-        code: Error code
-        message: Error message
-        data: Optional error data
-
-    Returns:
-        JSON-RPC error response as string
-    """
-    var error = JSONRPCError(code, message, data)
-    var response = JSONRPCResponse.error_response(id, error)
-    return response.to_json()
-
-
-fn create_success_response(id: String, result: String) -> String:
-    """Create a JSON-RPC success response.
-
-    Args:
-        id: Request ID
-        result: Result data as JSON string
-
-    Returns:
-        JSON-RPC success response as string
-    """
-    var response = JSONRPCResponse.success(id, result)
-    return response.to_json()
-
-
-fn validate_json_rpc_message(json_str: String) -> Bool:
-    """Validate if a string is a valid JSON-RPC message.
-
-    Args:
-        json_str: JSON string to validate
-
-    Returns:
-        True if valid JSON-RPC message, False otherwise
-    """
-    try:
-        _ = parse_message(json_str)
-        return True
-    except:
-        return False

@@ -121,7 +121,6 @@ struct MCPServer(MCPHandler):
         if self.is_running:
             raise Error("Server is already running")
 
-        print("🚀 Starting MCP server on", address)
         self.is_running = True
 
         try:

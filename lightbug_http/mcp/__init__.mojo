@@ -2,7 +2,6 @@
 from lightbug_http.mcp.jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONRPCError
 from lightbug_http.mcp.server import MCPServer
 from lightbug_http.mcp.streaming_transport import StreamingTransport
-from lightbug_http.mcp.messages import MCPMessage
 from lightbug_http.mcp.session import SessionManager, MCPSession
 
 # Tools system

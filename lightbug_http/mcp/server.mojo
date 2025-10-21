@@ -116,7 +116,6 @@ struct MCPServer(MCPHandler):
     fn start(mut self,
             address: String = "127.0.0.1:8081",
             max_concurrent_connections: UInt = 1000,
-            stream_timeout_seconds: Float64 = 300.0
             ) raises:
         """Start the MCP server using the streaming backend with configuration."""
         if self.is_running:
@@ -399,27 +398,16 @@ struct MCPServer(MCPHandler):
 
         if request.method == "tools/list":
             var tools = self.tools_registry.list_tools()
-
-            var tools_array = String("[")
-            var added_count = 0
-
+            var tool_jsons = List[String]()
             for i in range(len(tools)):
                 try:
-                    var tool_json = tools[i].to_json()
-                    if added_count > 0:
-                        tools_array = tools_array + ","
-                    tools_array = tools_array + tool_json
-                    added_count += 1
+                    tool_jsons.append(tools[i].to_json())
                 except e:
                     continue
-
-            tools_array = tools_array + "]"
-
-            var result_builder = JSONBuilder()
-            result_builder.add_raw("tools", tools_array)
-            var result_json = result_builder.build()
-            var response = JSONRPCResponse.success(request.id, result_json)
-            return response
+            var builder = JSONBuilder()
+            builder.add_array("tools", tool_jsons)
+            var result_json = builder.build()
+            return JSONRPCResponse.success(request.id, result_json)
         elif request.method == "tools/call":
             try:
                 var tool_info = self._parse_tool_call_params(request.params)
@@ -427,7 +415,6 @@ struct MCPServer(MCPHandler):
                 var result = self.tools_registry.execute_tool(tool_info.name, tool_info.arguments)
 
                 # Return the result as a successful JSON-RPC response
-                # (tool execution errors are encoded in the result content)
                 return JSONRPCResponse.success(request.id, result.to_json())
 
             except e:
@@ -502,11 +489,6 @@ struct MCPServer(MCPHandler):
         negotiated.sampling = self.server_capabilities.sampling and client_capabilities.sampling
 
         return negotiated
-
-    fn register_tool(mut self, tool: MCPTool, executor: ToolExecutionFunc) raises:
-        """Register a new tool with the server."""
-        self.tools_registry.register_tool(tool, executor)
-        var _ = self.tools_registry.list_tools()
 
     fn tool(mut self, name: String, description: String, parameters: MCPToolParameter, executor: ToolExecutionFunc) raises:
         """Register a new tool with the server."""

@@ -130,15 +130,6 @@ fn escape_json_string(s: String) -> String:
 
 @value
 struct JSONBuilder:
-    """Type-safe JSON object builder.
-
-    Example:
-        var builder = JSONBuilder()
-        builder.add_string("name", "value")
-        builder.add_int("count", 42)
-        builder.add_bool("active", True)
-        var json = builder.build()
-    """
     var _fields: List[String]
 
     fn __init__(out self):
@@ -181,6 +172,13 @@ struct JSONBuilder:
             json_value: Raw JSON string.
         """
         self._fields.append('"' + key + '":' + json_value)
+
+    fn add_array(mut self, key: String, values: List[String]):
+        var array_builder = JSONArrayBuilder()
+        for i in range(len(values)):
+            array_builder.add_raw(values[i])
+        var array_json = array_builder.build()
+        self.add_raw(key, array_json)
 
     fn add_optional_string(mut self, key: String, value: String):
         """Add a string field only if not empty.

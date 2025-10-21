@@ -23,15 +23,7 @@ struct SSEEvent:
 
 @value
 struct StreamingTransport(StreamableHTTPService):
-    """Streaming HTTP transport for MCP.
-
-    This transport handles:
-    - HTTP POST requests for client-to-server communication
-    - Chunked transfer encoding for large responses
-    - Server-Sent Events for real-time updates
-    - Content-Type validation (application/json)
-    - Session management via Mcp-Session-Id headers
-    """
+    """Streaming HTTP transport for MCP"""
 
     var mcp_handler: MCPServer
     var allowed_origins: List[String]

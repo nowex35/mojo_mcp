@@ -4,7 +4,6 @@ from lightbug_http._logger import logger
 from lightbug_http.connection import NoTLSListener, default_buffer_size, ListenConfig, TCPConnection
 from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
 from lightbug_http.streaming.streamable_service import StreamableHTTPService
-from lightbug_http.streaming.shared_connection import SharedConnection
 from lightbug_http.error import ErrorHandler
 from lightbug_http.mcp.utils import delete_zombies
 from lightbug_http._libc import fork, exit, pid_t
@@ -100,8 +99,6 @@ struct StreamingServer(Movable):
 
             # リスナーで待つ
             var conn = ln.accept()
-            # 所有権があることからforkで子プロセスに直接渡す(共有する)とエラーとなるので、ポインタ経由で共有する
-            # var shared_conn = SharedConnection(conn^)
 
             # Forkを使って新しいプロセスで接続を処理
             var pid: pid_t
@@ -111,7 +108,6 @@ struct StreamingServer(Movable):
                 logger.error("Fork failed:", String(e))
                 print("[StreamingServer] Fork failed:", String(e))
                 try:
-                    # shared_conn.teardown()
                     conn.teardown()
                 except:
                     pass
@@ -143,7 +139,6 @@ struct StreamingServer(Movable):
                 # 親プロセスは接続の所有権を子プロセスに譲渡する
                 # fork()後、親と子は独立したメモリを持つが、ファイルディスクリプタは共有される
                 # 親側で所有権を放棄することで、子プロセスだけがteardown()でクローズできる
-                # shared_conn.release_ownership()
                 conn.close()
             else:
                 logger.error("Fork returned negative PID")
@@ -155,15 +150,6 @@ struct StreamingServer(Movable):
         owned conn: TCPConnection,
         mut handler: T
     ) raises -> None:
-        """Serve a single streaming connection with keep-alive support.
-
-        Parameters:
-            T: The type of StreamableHTTPService that handles incoming requests.
-
-        Args:
-            shared_conn: A shared connection object representing a client connection.
-            handler: An object that handles incoming streaming HTTP requests.
-        """
         var remote_addr = conn.remote_addr()
         print("[CONN] New connection from:", remote_addr)
         logger.debug(

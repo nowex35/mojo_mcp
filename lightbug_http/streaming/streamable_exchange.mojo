@@ -6,7 +6,6 @@ from lightbug_http.cookie import RequestCookieJar
 from lightbug_http.uri import URI
 from lightbug_http.strings import BytesConstant
 from lightbug_http.mcp.utils import hex
-from lightbug_http.streaming.shared_connection import SharedConnection
 from lightbug_http.connection import TCPConnection
 
 
@@ -54,7 +53,7 @@ struct StreamableHTTPExchange:
         """Initialize an HTTP exchange.
 
         Args:
-            connection: The shared TCP connection
+            connection_ref: A pointer to the TCP connection
             method: HTTP method (GET, POST, etc.)
             uri: Request URI
             protocol: HTTP protocol version
@@ -108,10 +107,10 @@ struct StreamableHTTPExchange:
         max_uri_length: Int,
         initial_buffer: Span[Byte]
     ) raises -> StreamableHTTPExchange:
-        """Create an exchange from a shared TCP connection with parsed headers.
+        """Create an exchange from a pointer to a TCP connection with parsed headers.
 
         Args:
-            connection: The shared TCP connection
+            connection_ref: A pointer to the TCP connection
             addr: Server address
             max_uri_length: Maximum allowed URI length
             initial_buffer: Buffer containing at least the request headers

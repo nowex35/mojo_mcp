@@ -1,7 +1,7 @@
-from memory import Span
+from memory import Span, UnsafePointer
 from lightbug_http.io.bytes import Bytes, BytesConstant, ByteView, bytes
 from lightbug_http._logger import logger
-from lightbug_http.connection import NoTLSListener, default_buffer_size, ListenConfig
+from lightbug_http.connection import NoTLSListener, default_buffer_size, ListenConfig, TCPConnection
 from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
 from lightbug_http.streaming.streamable_service import StreamableHTTPService
 from lightbug_http.streaming.shared_connection import SharedConnection
@@ -101,7 +101,7 @@ struct StreamingServer(Movable):
             # リスナーで待つ
             var conn = ln.accept()
             # 所有権があることからforkで子プロセスに直接渡す(共有する)とエラーとなるので、ポインタ経由で共有する
-            var shared_conn = SharedConnection(conn^)
+            # var shared_conn = SharedConnection(conn^)
 
             # Forkを使って新しいプロセスで接続を処理
             var pid: pid_t
@@ -111,7 +111,8 @@ struct StreamingServer(Movable):
                 logger.error("Fork failed:", String(e))
                 print("[StreamingServer] Fork failed:", String(e))
                 try:
-                    shared_conn.teardown()
+                    # shared_conn.teardown()
+                    conn.teardown()
                 except:
                     pass
                 continue
@@ -119,7 +120,7 @@ struct StreamingServer(Movable):
             # 子プロセスではfork関数自体が返り値として子プロセスのpidではなく、pid=0を返す
             if pid == 0:
                 try:
-                    # 子プロセスはリスナーを閉じ、クライアント接続を処理に専念する
+                    # 子プロセスはリスナーを閉じ、クライアント接続の処理に専念する
                     try:
                         ln.close()
                     except:
@@ -127,7 +128,7 @@ struct StreamingServer(Movable):
                         pass
 
                     # リクエストに対する処理
-                    self.serve_connection(shared_conn, handler)
+                    self.serve_connection(conn^, handler)
 
                     # Exit successfully
                     exit(0)
@@ -142,11 +143,16 @@ struct StreamingServer(Movable):
                 # 親プロセスは接続の所有権を子プロセスに譲渡する
                 # fork()後、親と子は独立したメモリを持つが、ファイルディスクリプタは共有される
                 # 親側で所有権を放棄することで、子プロセスだけがteardown()でクローズできる
-                shared_conn.release_ownership()
+                # shared_conn.release_ownership()
+                conn.close()
+            else:
+                logger.error("Fork returned negative PID")
+                print("[StreamingServer] Fork returned negative PID")
+
 
     fn serve_connection[T: StreamableHTTPService](
         mut self,
-        shared_conn: SharedConnection,
+        owned conn: TCPConnection,
         mut handler: T
     ) raises -> None:
         """Serve a single streaming connection with keep-alive support.
@@ -158,7 +164,7 @@ struct StreamingServer(Movable):
             shared_conn: A shared connection object representing a client connection.
             handler: An object that handles incoming streaming HTTP requests.
         """
-        var remote_addr = shared_conn.get_remote_address()
+        var remote_addr = conn.remote_addr()
         print("[CONN] New connection from:", remote_addr)
         logger.debug(
             "Streaming connection accepted! Remote:",
@@ -177,7 +183,7 @@ struct StreamingServer(Movable):
             print("[CONN] Request #" + String(req_number) + " on this connection")
 
             # Check if connection is still valid before attempting to read
-            if shared_conn.is_closed():
+            if conn.is_closed():
                 print("[CONN] Connection is closed, exiting keep-alive loop")
                 return
 
@@ -187,12 +193,12 @@ struct StreamingServer(Movable):
                 try:
                     # header用の一時バッファ
                     var temp_buffer = Bytes(capacity=default_buffer_size)
-                    var bytes_read = shared_conn.read(temp_buffer)
+                    var bytes_read = conn.read(temp_buffer)
                     logger.debug("Bytes read:", bytes_read)
 
                     if bytes_read == 0:
                         print("[CONN] Client closed connection (0 bytes read)")
-                        shared_conn.teardown()
+                        conn.teardown()
                         return
 
                     header_buffer.extend(temp_buffer^)
@@ -211,14 +217,14 @@ struct StreamingServer(Movable):
                     if "EOF" in error_msg or "invalid descriptor" in error_msg or "not associated with a socket" in error_msg or "closed" in error_msg.lower():
                         print("[CONN] Client closed connection")
                         try:
-                            shared_conn.teardown()
+                            conn.teardown()
                         except:
                             pass
                         return
                     else:
                         logger.error("Failed to read headers:", error_msg)
                         try:
-                            shared_conn.teardown()
+                            conn.teardown()
                         except:
                             pass
                         return
@@ -227,14 +233,13 @@ struct StreamingServer(Movable):
             var exchange: StreamableHTTPExchange
             try:
                 exchange = StreamableHTTPExchange.from_connection(
-                    shared_conn,
+                    UnsafePointer(to=conn),
                     self.address(),
                     Int(max_request_uri_length),
                     Span(header_buffer)
                 )
             except e:
                 logger.error("Failed to parse request:", String(e))
-                shared_conn.teardown()
                 return
 
             var req_method = exchange.method
@@ -257,7 +262,7 @@ struct StreamingServer(Movable):
             if handler_error:
                 logger.error("Handler error:", handler_error.value())
                 print("[CONN] Closing connection due to handler error")
-                shared_conn.teardown()
+                conn.teardown()
                 return  # Exit the keep-alive loop
 
             # Check if we should close the connection
@@ -269,7 +274,7 @@ struct StreamingServer(Movable):
 
             if should_close:
                 print("[CONN] Closing connection (Connection: close header)")
-                shared_conn.teardown()
+                conn.teardown()
                 return  # Exit the keep-alive loop
             else:
                 print("[CONN] Keeping connection alive, waiting for next request...")

@@ -1,4 +1,4 @@
-from memory import Span
+from memory import Span, UnsafePointer
 from collections import Optional
 from lightbug_http.io.bytes import Bytes, ByteReader, ByteWriter, bytes
 from lightbug_http.header import Headers, HeaderKey
@@ -7,6 +7,7 @@ from lightbug_http.uri import URI
 from lightbug_http.strings import BytesConstant
 from lightbug_http.mcp.utils import hex
 from lightbug_http.streaming.shared_connection import SharedConnection
+from lightbug_http.connection import TCPConnection
 
 
 struct StreamableHTTPExchange:
@@ -30,7 +31,7 @@ struct StreamableHTTPExchange:
     var _response_headers_sent: Bool
 
     # Streaming state
-    var _connection: SharedConnection
+    var _connection: UnsafePointer[TCPConnection]
     var _use_chunked_encoding: Bool
     var _content_length: Int
     var _bytes_read: Int
@@ -40,7 +41,7 @@ struct StreamableHTTPExchange:
 
     fn __init__(
         out self,
-        connection: SharedConnection,
+        connection_ref: UnsafePointer[TCPConnection],
         method: String,
         uri: URI,
         protocol: String,
@@ -73,7 +74,7 @@ struct StreamableHTTPExchange:
         self.response_headers = Headers()
         self._response_headers_sent = False
 
-        self._connection = connection  # Copy shared connection
+        self._connection = connection_ref
         self._use_chunked_encoding = False  # Default to Content-Length, not chunked
         self._content_length = content_length
         self._bytes_read = 0
@@ -92,7 +93,7 @@ struct StreamableHTTPExchange:
         self.response_headers = existing.response_headers^
         self._response_headers_sent = existing._response_headers_sent
 
-        self._connection = existing._connection^
+        self._connection = existing._connection
         self._use_chunked_encoding = existing._use_chunked_encoding
         self._content_length = existing._content_length
         self._bytes_read = existing._bytes_read
@@ -102,7 +103,7 @@ struct StreamableHTTPExchange:
 
     @staticmethod
     fn from_connection(
-        connection: SharedConnection,
+        connection_ptr: UnsafePointer[TCPConnection],
         addr: String,
         max_uri_length: Int,
         initial_buffer: Span[Byte]
@@ -176,7 +177,7 @@ struct StreamableHTTPExchange:
                 break
 
         return StreamableHTTPExchange(
-            connection,
+            connection_ptr,
             method,
             uri,
             protocol,
@@ -243,7 +244,7 @@ struct StreamableHTTPExchange:
 
             var to_read = min(remaining, self.buffer_size)
             var buffer = Bytes(capacity=to_read)
-            var bytes_read = self._connection.read(buffer)
+            var bytes_read = self._connection[].read(buffer)
 
             if bytes_read == 0:
                 self._is_complete = True
@@ -259,7 +260,7 @@ struct StreamableHTTPExchange:
         var buffer = Bytes(capacity=self.buffer_size)
         var bytes_read: Int
         try:
-            bytes_read = self._connection.read(buffer)
+            bytes_read = self._connection[].read(buffer)
         except e:
             if String(e) == "EOF":
                 self._is_complete = True
@@ -339,7 +340,7 @@ struct StreamableHTTPExchange:
 
         # Send
         var header_bytes = writer^.consume()
-        _ = self._connection.write(Span(header_bytes))
+        _ = self._connection[].write(Span(header_bytes))
 
         self._response_headers_sent = True
 
@@ -357,7 +358,7 @@ struct StreamableHTTPExchange:
 
         if not self._use_chunked_encoding:
             # Direct write for Content-Length or SSE
-            _ = self._connection.write(Span(data))
+            _ = self._connection[].write(Span(data))
             return
 
         # Chunked encoding: size\r\ndata\r\n (only when explicitly enabled)
@@ -367,7 +368,7 @@ struct StreamableHTTPExchange:
         writer.write("\r\n")
 
         var chunk = writer^.consume()
-        _ = self._connection.write(Span(chunk))
+        _ = self._connection[].write(Span(chunk))
 
     fn write_sse_event(mut self, event_type: String, data: String, id: String = "") raises:
         """Write a Server-Sent Event.
@@ -395,7 +396,7 @@ struct StreamableHTTPExchange:
 
         event_str += "\n"
 
-        _ = self._connection.write(Span(bytes(event_str)))
+        _ = self._connection[].write(Span(bytes(event_str)))
 
     fn end_stream(mut self) raises:
         """End the response stream.
@@ -410,7 +411,7 @@ struct StreamableHTTPExchange:
 
         if self._use_chunked_encoding:
             var end_chunk = bytes("0\r\n\r\n")
-            _ = self._connection.write(Span(end_chunk))
+            _ = self._connection[].write(Span(end_chunk))
 
     fn flush(mut self) raises:
         """Flush any buffered data.
@@ -422,4 +423,4 @@ struct StreamableHTTPExchange:
 
     fn teardown(mut self) raises:
         """Close the connection."""
-        self._connection.teardown()
+        self._connection[].teardown()

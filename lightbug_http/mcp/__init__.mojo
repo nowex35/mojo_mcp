@@ -22,8 +22,6 @@ from lightbug_http.mcp.utils import (
 # Streaming HTTP components (moved to lightbug_http.streaming)
 # Kept here for backward compatibility
 from lightbug_http.streaming import (
-    StreamableHTTPRequest,
-    StreamableHTTPResponse,
     StreamableBodyStream,
     StreamableHTTPExchange,
     StreamableHTTPService,

@@ -31,8 +31,6 @@ fn example_slow_tool(request: MCPToolRequest) raises -> MCPToolResult:
     # Get the delay parameter
     var delay_seconds: UInt = request.get_int("delay", 5)
 
-    result.add_text_content("Starting slow operation for " + String(delay_seconds) + " seconds...")
-
     # Simulate slow work using actual sleep
     sleep(delay_seconds)
 
@@ -65,4 +63,4 @@ fn main() raises:
         executor=example_slow_tool
     )
 
-    mcp_server.start(address="127.0.0.1:8082")
+    mcp_server.start(address="127.0.0.1:8081")

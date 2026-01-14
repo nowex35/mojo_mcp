@@ -1,6 +1,6 @@
 # Core MCP components
 from lightbug_http.mcp.jsonrpc import JSONRPCRequest, JSONRPCResponse, JSONRPCNotification, JSONRPCError
-from lightbug_http.mcp.server import MCPServer
+from lightbug_http.mcp.mcp_server import MCPServer
 from lightbug_http.mcp.streaming_transport import StreamingTransport
 from lightbug_http.mcp.session import SessionManager, MCPSession
 

@@ -11,7 +11,7 @@ from .jsonrpc import (
     invalid_request,
     parse_message,
 )
-from .server import MCPServer
+from .mcp_server import MCPServer
 from .messages import MCP_PROTOCOL_VERSION, is_compatible_version
 from .utils import JSONBuilder
 

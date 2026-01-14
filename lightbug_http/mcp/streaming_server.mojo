@@ -2,8 +2,8 @@ from memory import Span, UnsafePointer
 from lightbug_http.io.bytes import Bytes, BytesConstant, ByteView, bytes
 from lightbug_http._logger import logger
 from lightbug_http.connection import NoTLSListener, default_buffer_size, ListenConfig, TCPConnection
-from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
-from lightbug_http.streaming.streamable_service import StreamableHTTPService
+from .streamable_exchange import StreamableHTTPExchange
+from .streamable_service import StreamableHTTPService
 from lightbug_http.error import ErrorHandler
 from lightbug_http.mcp.utils import delete_zombies
 from lightbug_http._libc import fork, exit, pid_t

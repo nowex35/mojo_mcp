@@ -1,4 +1,4 @@
-from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
+from .streamable_exchange import StreamableHTTPExchange
 
 trait StreamableHTTPService:
     """Service trait for handling streaming HTTP exchanges.

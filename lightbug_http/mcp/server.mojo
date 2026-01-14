@@ -5,7 +5,7 @@ from .session import SessionManager
 from .tools import MCPTool, MCPToolRegistry, ToolExecutionFunc
 from .utils import generate_uuid, current_time_ms, parse_json_string, parse_json_object_string, parse_json_object
 from .timeout import TimeoutManager, TimeoutConfig, CancellationNotification, create_cancellation_error
-from lightbug_http.streaming.server import StreamingServer
+from .streaming_server import StreamingServer
 from .streaming_transport import StreamingTransport
 
 # Connection states

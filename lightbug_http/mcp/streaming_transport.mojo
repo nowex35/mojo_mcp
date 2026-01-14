@@ -1,7 +1,7 @@
 from memory import Span
 from lightbug_http.io.bytes import bytes, Bytes, ByteView
-from lightbug_http.streaming.streamable_service import StreamableHTTPService
-from lightbug_http.streaming.streamable_exchange import StreamableHTTPExchange
+from .streamable_service import StreamableHTTPService
+from .streamable_exchange import StreamableHTTPExchange
 from .jsonrpc import (
     JSONRPCRequest,
     JSONRPCResponse,
